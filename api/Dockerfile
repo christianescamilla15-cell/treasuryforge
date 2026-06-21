@@ -9,8 +9,9 @@ WORKDIR /app
 COPY api/requirements.txt /app/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/api/requirements.txt
 
-# Copy the production package + the API wrapper
+# Copy the production package + the API wrapper + tests (for /api/stats to count them)
 COPY treasuryforge /app/treasuryforge
+COPY tests /app/tests
 COPY api /app/api
 
 EXPOSE 8000

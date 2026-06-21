@@ -30,24 +30,32 @@
 
   <!-- HERO -->
   <section class="hero">
-    <p class="eyebrow">Interactive demo · 4-layer agent safety</p>
+    <p class="eyebrow">Live demo · backed by the REAL Python engine</p>
     <h1>The policy <em>never</em> trusts the agent.</h1>
     <p class="lede">
-      Watch a simulated trading agent propose intents in real time. The Policy Engine intercepts every
-      single one and evaluates it against 8 hard rules. Approved intents reach the Executor. Denied
-      intents are logged with the exact rule that fired. The breaker trips on drawdown and stays tripped
-      after a simulated SIGKILL.
+      Every button below calls the actual <code>treasuryforge.PolicyEngine</code> and <code>Runner</code>
+      running on a Python server — not a JS port. Watch real intents flow through the 8 hard rules,
+      real backtests over hundreds of ticks, and a real HMAC audit chain verifying its own integrity.
     </p>
     <div class="ctas">
-      <button id="btn-play" class="btn btn--primary">▶ Run simulation</button>
-      <button id="btn-step" class="btn">Step 1 tick</button>
-      <button id="btn-crash" class="btn btn--danger">⚡ Trigger SIGKILL</button>
+      <button id="btn-play" class="btn btn--primary">▶ Run real backtest</button>
+      <button id="btn-step" class="btn">Step 1 intent</button>
+      <button id="btn-crash" class="btn btn--danger">⚡ Run crash scenario</button>
       <button id="btn-reset" class="btn btn--ghost">Reset</button>
     </div>
-    <p class="hero__hint">
-      Tip: hit <kbd>Run simulation</kbd> to watch the full flow, or step tick-by-tick. The audit chain
-      verifies its own integrity at the bottom.
+    <p class="hero__hint" id="api-status">
+      <span class="dot dot--ok"></span> connecting to API…
     </p>
+  </section>
+
+  <!-- REAL SYSTEM STATS (from API /api/stats) -->
+  <section class="kpis" style="margin-top: 24px; border: 1px solid var(--border); border-radius: 14px; padding: 16px; background: linear-gradient(135deg, rgba(110,168,255,0.04), rgba(155,110,255,0.04));">
+    <div class="kpi"><div class="kpi__v" id="stats-tests">…</div><div class="kpi__l">Tests passing (Python)</div></div>
+    <div class="kpi"><div class="kpi__v" id="stats-files">…</div><div class="kpi__l">Test files</div></div>
+    <div class="kpi"><div class="kpi__v" id="stats-modules">…</div><div class="kpi__l">Production modules</div></div>
+    <div class="kpi"><div class="kpi__v" id="stats-loc">…</div><div class="kpi__l">LOC production code</div></div>
+    <div class="kpi"><div class="kpi__v">8</div><div class="kpi__l">Hard policy rules</div></div>
+    <div class="kpi"><div class="kpi__v">HMAC</div><div class="kpi__l">SHA-256 audit chain</div></div>
   </section>
 
   <!-- KEY METRICS -->
@@ -152,10 +160,10 @@
 
   <footer class="footer">
     <p>
-      Live demo of the safety architecture pattern in
-      <a href="https://github.com/christianescamilla15-cell/treasuryforge">github.com/christianescamilla15-cell/treasuryforge</a>.
-      JavaScript port of the policy engine for browser execution. The real implementation is Python with
-      Hypothesis property-based fuzzing over the same 8 invariants.
+      Live demo of <a href="https://github.com/christianescamilla15-cell/treasuryforge">github.com/christianescamilla15-cell/treasuryforge</a>.
+      The browser UI calls <a href="https://treasuryforge-api.onrender.com/docs"><code>treasuryforge-api.onrender.com</code></a>
+      which runs the actual Python package — same <code>PolicyEngine</code>, <code>Runner</code>, <code>AuditLog</code>
+      as production. No JS port, no fake data.
     </p>
     <p>
       Generalized library: <a href="https://github.com/christianescamilla15-cell/agentguard"><code>agentguard</code></a>
