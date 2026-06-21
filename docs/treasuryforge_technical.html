@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>treasuryforge — Detalle Técnico</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: #1a1d24; font-size: 10.3px; line-height: 1.5; margin: 0; }
+  h1 { font-size: 26px; margin: 0 0 4px; color: #0b1f3a; }
+  h2 { font-size: 16px; margin: 22px 0 6px; color: #0b1f3a;
+       border-bottom: 2px solid #cdd6e4; padding-bottom: 3px; page-break-after: avoid; }
+  h3 { font-size: 12.5px; margin: 14px 0 4px; color: #1f3a5f; page-break-after: avoid; }
+  p { margin: 5px 0; }
+  ul, ol { margin: 5px 0 5px 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  code, .mono { font-family: "SF Mono", Consolas, "Roboto Mono", monospace; font-size: 9.2px;
+        background: #f1f4f9; padding: 1px 4px; border-radius: 3px; color: #243; }
+  pre { background: #0e1726; color: #e7edf6; padding: 9px 11px; border-radius: 6px;
+        font-family: Consolas, monospace; font-size: 8.8px; line-height: 1.45; overflow-x: auto;
+        white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9.3px; }
+  th, td { border: 1px solid #d3dbe8; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #eef2f8; color: #0b1f3a; }
+  .cover { padding: 40px 0 24px; border-bottom: 3px solid #0b1f3a; margin-bottom: 8px; }
+  .sub { color: #4a5568; font-size: 12px; margin-top: 6px; }
+  .meta { color: #6b7280; font-size: 9.5px; margin-top: 14px; }
+  .tag { display: inline-block; background: #0b1f3a; color: #fff; font-size: 8px; font-weight: 600;
+         padding: 1px 7px; border-radius: 10px; vertical-align: middle; margin-left: 6px; }
+  .ok { color: #137a3f; font-weight: 600; }
+  .no { color: #b42318; font-weight: 600; }
+  .warn { color: #b54708; font-weight: 600; }
+  .callout { border-left: 4px solid #b54708; background: #fff7ed; padding: 7px 11px; margin: 9px 0;
+             border-radius: 0 5px 5px 0; }
+  .good { border-left-color: #137a3f; background: #ecfdf3; }
+  .lead { font-size: 11px; color: #344; }
+  .section { page-break-inside: avoid; }
+  .pb { page-break-before: always; }
+  .small { font-size: 8.8px; color: #555; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>treasuryforge</h1>
+  <div class="sub">Agente de tesorería cripto local-first, autónomo, con gobierno de riesgo cuantitativo<br>
+  <strong>Detalle técnico del sistema</strong></div>
+  <div class="meta">Versión: rama <span class="mono">harden/mutation-coverage</span> · 2026-06-18 ·
+  Python 3.12 (core stdlib-only) · 613 tests, cobertura 93.0%, gate de mutación ≥85% (money-path) ·
+  <strong>riel HL probado con dinero real · motor carry-engine + cross-venue</strong></div>
+</div>
+
+<p class="lead">Este documento describe la arquitectura, las capas de gobernanza y seguridad, el ambiente
+de validación y el estado real del sistema — incluyendo sus <strong>limitaciones honestas</strong>. La
+premisa central no es prometer retorno; es <strong>no hacer estupideces con dinero real</strong>.</p>
+
+<h2>1 · Filosofía y principio rector</h2>
+<p>Una sola regla gobierna todo el diseño:</p>
+<pre>el AGENTE propone  →  la POLÍTICA dispone (reglas duras)  →  el WALLET ejecuta dentro de límites</pre>
+<ul>
+  <li>El "cerebro" (estrategia / LLM) <strong>nunca se confía</strong>: puede alucinar, emocionarse,
+      sobre-interpretar datos o ser víctima de prompt-injection vía datos de mercado.</li>
+  <li>Entre la intención propuesta y cualquier ejecución se interpone <span class="mono">policy.py</span>,
+      una capa de reglas <strong>no negociables</strong> que el agente no puede modificar (config congelada).</li>
+  <li><strong>Core stdlib-only</strong> (cero dependencias, cero red, cero llaves, cero fondos en el núcleo);
+      las dependencias (keyring, SDK de Hyperliquid) viven en cuarentena en los adaptadores.</li>
+  <li>El sistema está diseñado para <strong>decir NO</strong>: rechaza estrategias que no superan el tribunal
+      de riesgo, y se cierra en falla (<em>fail-closed</em>) ante cualquier incertidumbre.</li>
+</ul>
+
+<h2>2 · Arquitectura por capas</h2>
+<table>
+  <tr><th>Capa</th><th>Qué hace</th><th>Módulos</th></tr>
+  <tr><td><strong>Percepción</strong></td><td>señales mecánicas (probabilidad/edge)</td>
+      <td><span class="mono">signals/funding, cointegration, pairs, linalg</span></td></tr>
+  <tr><td><strong>Decisión</strong></td><td>propone una intención (comprar/vender/hold)</td>
+      <td><span class="mono">agent.py</span></td></tr>
+  <tr><td><strong>Gobernanza</strong></td><td>política dura + tribunal de riesgo cuantitativo</td>
+      <td><span class="mono">policy.py, risk/*</span></td></tr>
+  <tr><td><strong>Ejecución</strong></td><td>convierte intención aprobada en orden, idempotente</td>
+      <td><span class="mono">executor, exchanges/*, orders.py</span></td></tr>
+  <tr><td><strong>Seguridad</strong></td><td>preflight, watchdog, staleness, supervisor</td>
+      <td><span class="mono">preflight, watchdog, staleness, live, service</span></td></tr>
+  <tr><td><strong>Durabilidad</strong></td><td>WAL crash-safe + log de auditoría con hash-chain</td>
+      <td><span class="mono">journal.py, audit.py</span></td></tr>
+</table>
+<p>El <span class="mono">Runner</span> determinista del simulador es el <strong>núcleo validado</strong> (no se
+toca). La ruta en vivo lo envuelve con el <span class="mono">LiveSupervisor</span> y el <span class="mono">Service</span>
+fail-closed.</p>
+
+<h2>3 · Motor de política — las 8 reglas duras</h2>
+<p>Evaluadas en orden; la primera que falla deniega la intención. Son la muralla entre la intención y la ejecución:</p>
+<ol>
+  <li><strong>Kill switch</strong> — paro global, deniega todo.</li>
+  <li><strong>Circuit breaker</strong> — si el equity cae más allá de <span class="mono">max_drawdown</span>, traba y se queda trabado.</li>
+  <li><strong>Staleness gate</strong> — deniega si los datos son más viejos que el presupuesto (fail-closed).</li>
+  <li><strong>Allowlist</strong> — solo activos aprobados.</li>
+  <li><strong>Cap de notional por tx</strong> (+ piso mínimo del exchange).</li>
+  <li><strong>Rate limit</strong> — máximo de trades por ventana.</li>
+  <li><strong>Spend budget</strong> — máximo de valor acumulado por ventana (cierra el drip-drain que un límite por conteo deja).</li>
+  <li><strong>Solvencia</strong> — nunca propone lo que el wallet no puede pagar.</li>
+</ol>
+<p>La config es <strong>congelada</strong> (frozen dataclass) y el estado latcheado (breaker, ventanas) es
+<strong>snapshot/restore-able</strong> vía <span class="mono">journal.py</span>: un crash no puede des-trabar
+silenciosamente el breaker ni re-anclar el piso de drawdown a un equity post-pérdida.</p>
+
+<h2 class="pb">4 · Framework cuantitativo de riesgo</h2>
+<p>El núcleo de "¿debo desplegar esta estrategia, y con cuánto?". Cadena de razonamiento:</p>
+<pre>MEDIR (E, σ, distribución)  →  VALIDAR (DSR)  →  DIMENSIONAR (f = DSR · Kelly · ½)  →  SOBREVIVIR (ruina)</pre>
+<ul>
+  <li><strong>Expectancy:</strong> E = p(g−c) − (1−p)(l+c). La frecuencia amplifica el <em>signo</em> de E
+      (edge negativo × alta frecuencia = ruina rápida).</li>
+  <li><strong>Crecimiento geométrico:</strong> g ≈ E − σ²/2 (drag de varianza). Se dimensiona por crecimiento
+      log, no por el promedio aritmético.</li>
+  <li><strong>Kelly fraccional:</strong> f* = E/σ², usado a fracción λ ≈ DSR (Bayesian-Kelly bajo incertidumbre
+      de modelo: el mismo DSR que detecta overfitting <em>es</em> el multiplicador de tamaño).</li>
+  <li><strong>Deflated Sharpe Ratio (DSR):</strong> corrige el Sharpe por nº de configs probadas (selection bias),
+      tamaño de muestra, skew y kurtosis. Responde: "dado que probé N estrategias, ¿esto es mejor que la mejor suerte?".</li>
+  <li><strong>Purged/embargoed CV:</strong> validación cruzada que evita fuga temporal entre folds.</li>
+  <li><strong>Monte-Carlo risk-of-ruin:</strong> block-bootstrap (preserva rachas), con shocks de cola y régimen
+      adverso. Demostró que full-Kelly es ruina casi segura.</li>
+</ul>
+<h3>Las compuertas (gates) de despliegue</h3>
+<table>
+  <tr><th>#</th><th>Gate</th><th>Criterio</th></tr>
+  <tr><td>0</td><td>edge_is_real</td><td>DSR ≥ min_dsr (default 0.60)</td></tr>
+  <tr><td>1</td><td>edge</td><td>E[r] &gt; costo + margen</td></tr>
+  <tr><td>2</td><td>geometric_growth</td><td>E[ln(1+f·r)] &gt; 0</td></tr>
+  <tr><td>3</td><td>kelly_cap</td><td>leverage ≤ λ·Kelly y ≤ cap duro</td></tr>
+  <tr><td>4</td><td>risk_of_ruin</td><td>P(ruina estresada) &lt; ε</td></tr>
+  <tr><td>5</td><td>expected_drawdown</td><td>E[maxDD] &lt; umbral</td></tr>
+</table>
+
+<h2>5 · Capas de gobernanza (ciclo de vida de la estrategia)</h2>
+<ul>
+  <li><strong>Reporte de decisión</strong> — veredictos nombrados: <span class="mono">NO_EDGE / EDGE_IS_NOT_RELIABLE
+      / PATH_TOO_DANGEROUS / DEPLOY_SMALL</span>, con métricas crudas, validación, sizing y riesgo.</li>
+  <li><strong>Detector de gap backtest-vs-live</strong> — compara expectativa de backtest vs paper-live, slippage
+      realizado vs modelado, fill-rate; veredicto desde <span class="mono">EDGE_DECAYED</span> hasta
+      <span class="mono">APPROVE_STAGE_1</span>.</li>
+  <li><strong>Escalera de etapas</strong> — DEAD → PAPER_LIVE → MICRO (1%) → SMALL (3%) → NORMAL (8%) →
+      CAPPED (20%). Prioridad KILL &gt; DEMOTE &gt; PROMOTE &gt; HOLD. Una estrategia gana capital un escalón a la
+      vez y se degrada/mata si su comportamiento en vivo diverge.</li>
+  <li><strong>Drift kill-switch (Page-Hinkley)</strong> — detector secuencial de cambio: caída de expectativa,
+      subida de slippage o DD fuera de banda → KILL permanente.</li>
+  <li><strong>Cementerio de estrategias</strong> — JSONL append-only: cada rechazo guarda hipótesis, modo de
+      fallo, condición de reactivación y un <em>fingerprint</em> (atrapa el mismo cadáver disfrazado).</li>
+  <li><strong>Hashes de reproducibilidad</strong> — hash canónico de datos/config/estrategia/reporte para
+      asegurar verdad histórica.</li>
+</ul>
+
+<h2 class="pb">6 · Capa de seguridad de ejecución (los "no-regrets")</h2>
+<p>Construida y endurecida ANTES de cualquier flujo de orden real. Todo inyectable (sin reloj/red/llaves en tests).</p>
+<h3>6.1 — IdempotentOrderManager (exactly-once)</h3>
+<p>El fallo más peligroso en vivo no es una mala estrategia; es <strong>duplicar una orden</strong> por timeout,
+crash o retry. Se enforza con dos mecanismos:</p>
+<ul>
+  <li><strong>origin_id estable</strong> por intención lógica, persistido en el journal → todo retry/reinicio reusa el mismo id.</li>
+  <li><strong>reconcile-before-retry:</strong> ante cualquier resultado incierto (timeout/5xx) o tras un crash,
+      se reconcilia por <span class="mono">origin_id</span> ANTES de actuar; un fill se registra una vez, y solo
+      un no-fill confirmado se reintenta (con el mismo id, que el exchange deduplica entre órdenes activas).</li>
+</ul>
+<pre>PLACING → SUBMITTED → FILLED          (camino feliz)
+PLACING → REJECTED                    (rechazo determinista, nunca aterrizó)
+PLACING → UNKNOWN  → FILLED | OPEN     (timeout/5xx, resuelto por reconcile)
+FILLED y REJECTED son terminales; submit() sobre un id terminal replica el resultado.</pre>
+<h3>6.2 — DeadMansSwitch (watchdog cliente-side)</h3>
+<p>Bitso no tiene <span class="mono">cancelAllAfter</span> server-side, así que se construye el equivalente: el
+loop debe <span class="mono">beat()</span> cada <span class="mono">timeout_s</span>; un supervisor dispara el
+fail-safe (cancelar órdenes resting + trabar kill-switch) <strong>exactamente una vez</strong> y queda trabado
+(fail-closed, reset manual). El heartbeat se persiste atómicamente: un supervisor fresco trips sobre un latido
+viejo (el bot murió con órdenes vivas). El fail-safe corre ANTES de persistir el trip, así un crash a media
+cancelación re-dispara en vez de saltársela.</p>
+<h3>6.3 — Preflight fail-closed (arranque seguro)</h3>
+<p>11 precondiciones; si <strong>cualquiera</strong> falla → estado <span class="mono">SAFE_HALTED</span>, nunca
+"best effort": modo explícito, config cargada, journal escribible, credenciales presentes, allowlist activa, caps
+cargados, kill-switch limpio, reloj sano, skew de reloj acotado, feed de datos fresco, exchange alcanzable.</p>
+<h3>6.4 — StalenessGate (runtime: reloj + frescura)</h3>
+<p>Rehúsa operar si: el wall-clock saltó hacia atrás, el drift wall/monotonic excede presupuesto (NTP step / VM
+pause), o el dato más fresco supera su budget. Provee el <span class="mono">data_age_ns</span> real que la regla
+de staleness de la política consume; <span class="mono">WINDOW_24H_NS</span> para ventanas reales de 24h.</p>
+<h3>6.5 — LiveSupervisor + Service + systemd</h3>
+<p>El <strong>LiveSupervisor</strong> une todo en un <span class="mono">step()</span> gobernado: late el watchdog →
+rehúsa con dato viejo/reloj raro → la política dispone → ruta la orden por el manager idempotente.
+El <strong>Service</strong> es el proceso externo fail-closed: preflight-gate, reconcilia órdenes in-flight ANTES
+del loop (recuperación de crash, nunca re-coloca), exit limpio si trips el dead-man, y cierra ante CUALQUIER
+excepción (dispara cancel+kill). Códigos de salida que la unidad de systemd usa:</p>
+<table>
+  <tr><th>Código</th><th>Significado</th><th>¿Reinicia?</th></tr>
+  <tr><td>10 <span class="mono">SAFE_HALTED</span></td><td>preflight rechazó</td><td><span class="no">NO</span> — humano arregla el entorno</td></tr>
+  <tr><td>20 <span class="mono">DEAD_MAN</span></td><td>el dead-man disparó</td><td><span class="no">NO</span> — humano inspecciona</td></tr>
+  <tr><td>30 <span class="mono">ERROR</span></td><td>falla inesperada</td><td><span class="ok">SÍ</span> — el arranque re-corre preflight + reconcilia primero</td></tr>
+</table>
+<h3>6.6 — Riel de ejecución Hyperliquid (3 gates, dinero real probado)</h3>
+<p>Construido en el orden seguro, cada gate antes del siguiente:</p>
+<ol>
+  <li><strong>Dry-run gate</strong> (keyless) — arma el payload L1 exacto con formato fiel al SDK (size→szDecimals,
+      precio→5 sig-figs, strings normalizados) y lo valida contra el piso de $10 del venue y el cap de seguridad,
+      <strong>sin firmar ni mandar</strong>.</li>
+  <li><strong>Sign-without-send</strong> (VPS) — firma con la agent key, recupera el firmante y confirma que es uno de
+      los agents <strong>autorizados on-chain</strong> (<span class="mono">extraAgents</span>, no solo el del frontend),
+      <strong>sin POST</strong>.</li>
+  <li><strong>Orden viva</strong> — vía el <span class="mono">IdempotentOrderManager</span>: <span class="mono">cloid</span>
+      determinista (idempotencia nativa de HL → un retry reusa el mismo id y el venue deduplica), reconcile del fill
+      <em>por cloid</em>, y close reduce-only (el piso de $10 es regla de apertura, no de cierre).</li>
+</ol>
+<p>La agent key (trade-only / no-withdraw) la provisiona el dueño en el VPS (<span class="mono">read -s</span> oculto →
+env-file 600), <strong>nunca por chat</strong>. Gotcha resuelto: la cuenta unificada de HL reporta el sub-ledger de
+perps en $0 mientras el USDC vive en spot — el colateral se lee como perp + spot USDC.</p>
+
+<h2>7 · Estrategias, tribunal y shadow</h2>
+<h3>7.1 — Funding-carry (delta-neutral)</h3>
+<p>Long spot + short perp (size-matched): el PnL de precio se cancela; siendo short del perp recibes funding cada
+intervalo cuando el rate es positivo. Datos reales de Hyperliquid: funding positivo regime-dependiente en ETH/BTC
+(~10.95% APR en picos), negativo en SOL/AVAX. <span class="warn">Veredicto del tribunal: RECHAZADA en backtest</span>
+(DSR ~0.24 — edge incierto). Es el único edge con base estructural real, así que pasa al shadow para el filtro en vivo.</p>
+<h3>7.2 — Stat-arb pairs (cointegración) + regime-gating</h3>
+<p>Engle-Granger con valores críticos Phillips-Ouliaris correctos, z-score rodante, dollar-neutral. Real-data:
+solo ~8/45 pares cointegran; los Sharpe altos eran artefacto de selección (DSR bajo, fold de CV negativo, ruina
+estresada alta). <span class="warn">RECHAZADO.</span> Se añadió el <strong>regime-gating</strong> que el research marcó
+como no-negociable: <span class="mono">variance-ratio</span> (reversión vs tendencia) + ADF rolling (detector de
+ruptura estructural) + banda de half-life + stop-z direccional. Medido honesto en datos reales: el gate corta 86%
+de los trades por régimen no-reversivo, <strong>pero todos los DSR gated siguen ≤0.21</strong> — el gate es una capa
+de RIESGO correcta (no tradear un spread roto), <em>no</em> un generador del alpha que no existe.</p>
+<h3>7.3 — MR_SCALP (mean-reversion corto) — construida para matarla</h3>
+<p>Idea de scalping z-score (hold ≤10 min) convertida en regla mecánica con 5 castigos obligatorios en el backtest
+(fill maker conservador, stop-first peor-caso, sin salida en la misma vela, métricas de adverse selection, gate
+edge/costo). Real-data HL: ETH/BTC <span class="no">COSTS_EAT_EDGE</span> (edge bruto ya negativo); SOL parecía
+máquina de dinero (100% win, DSR 1.000) sobre 2 trades → <span class="no">INSUFFICIENT_FREQUENCY</span>, el espejismo
+de muestra chica que el gate de frecuencia mató. Enterrada en el cementerio.</p>
+<div class="callout good"><strong>Que ninguna pase NO es un fallo — es el sistema funcionando.</strong> El tribunal
+mató a los perdedores Y resistió a los "ganadores" seductores de muestra chica. Ese es exactamente su trabajo.</div>
+<h3>7.4 — Basis spot-vs-perp (cash-and-carry)</h3>
+<p>Segunda estrategia, genuinamente distinta del funding-carry: en un perp el basis <em>es</em> el funding, así que
+ésta modela el stream EXTRA que el funding-carry ignora — la <strong>convergencia del premium</strong> (mark vs oracle).
+ENTER cuando el perp está rico (contango, premium ≥ umbral), HOLD cobrando funding + (premium previo − actual)
+mientras revierte, EXIT al converger. Track record independiente.</p>
+<h3>7.5 — Shadow paper-book × 10 (el filtro honesto, en vivo)</h3>
+<p>Corre las señales sobre datos <strong>en vivo</strong> (Hyperliquid <span class="mono">/info</span>, keyless), simula
+la posición y acumula PnL hipotético — <strong>sin dinero, sin llaves, sin venue</strong>. Ahora <strong>10 track
+records en paralelo</strong>: funding-carry × 5 monedas (BTC/ETH/SOL/AVAX/ARB) + basis × 5 monedas. Cada uno persiste
+en su journal (acumula día a día, sobrevive reinicios). <span class="mono">shadow_status.py</span> agrega TODOS los
+ledgers en un board (intervalos, días, % en posición, funding/convergencia, net, Sharpe/DSR en vivo) convergiendo
+hacia el gate 0.60. Corre como <span class="mono">systemd timer</span> horario en el VPS. Multiplicar monedas/
+estrategias multiplica la evidencia-por-hora a costo cero — la forma honesta de "validar más rápido" (no abrir
+posiciones a ciegas, que es apostar con EV negativo y no valida el edge).</p>
+
+<h2 class="pb">8 · Ambiente de validación</h2>
+<h3>8.1 — Los 5 procesos de escaneo (en Docker, todos verdes)</h3>
+<table>
+  <tr><th>Proceso</th><th>Qué valida</th><th>Estado</th></tr>
+  <tr><td>ruff</td><td>lint + complejidad (C901, max 14)</td><td class="ok">PASS</td></tr>
+  <tr><td>mypy --strict</td><td>tipos estáticos (strict_equality, etc.)</td><td class="ok">PASS</td></tr>
+  <tr><td>bandit</td><td>seguridad (SAST)</td><td class="ok">PASS</td></tr>
+  <tr><td>pip-audit</td><td>CVEs en dependencias</td><td class="ok">PASS</td></tr>
+  <tr><td>pytest-cov</td><td>tests + cobertura ≥90%</td><td class="ok">PASS (92.9%)</td></tr>
+</table>
+<h3>8.2 — Testing de mutación (mutmut) — gate ≥85% por componente</h3>
+<p>La lección clave: <strong>cobertura alta ≠ tests fuertes</strong>. La mutación inyecta bugs y verifica que los
+tests los detectan (kill-score = matados/total). Sizing tenía 91% de cobertura pero 56% de mutación. Resultados:</p>
+<div class="grid2">
+<table>
+  <tr><th>Componente (core)</th><th>Mutación</th></tr>
+  <tr><td>policy.py</td><td class="ok">94.8%</td></tr>
+  <tr><td>risk/ruin.py</td><td class="ok">96.6%</td></tr>
+  <tr><td>sizing.py</td><td class="ok">96%</td></tr>
+  <tr><td>metrics.py</td><td class="ok">97%</td></tr>
+  <tr><td>risk/stages.py</td><td class="ok">88%</td></tr>
+  <tr><td>risk/drift.py</td><td class="ok">98.5%</td></tr>
+  <tr><td>risk/graveyard.py</td><td class="ok">90%</td></tr>
+  <tr><td>risk/live_gap.py</td><td class="ok">94%</td></tr>
+</table>
+<table>
+  <tr><th>Componente (seguridad/wiring)</th><th>Mutación</th></tr>
+  <tr><td>orders.py</td><td class="ok">90%</td></tr>
+  <tr><td>watchdog.py</td><td class="ok">92%</td></tr>
+  <tr><td>preflight.py</td><td class="ok">91%</td></tr>
+  <tr><td>staleness.py</td><td class="ok">89%</td></tr>
+  <tr><td>live.py</td><td class="ok">97%</td></tr>
+  <tr><td>service.py</td><td class="ok">100%</td></tr>
+  <tr><td>run_live.py</td><td class="ok">≥85%</td></tr>
+  <tr><td>shadow.py</td><td class="ok">97%</td></tr>
+</table>
+</div>
+<p class="small">Los survivors residuales son <em>provablemente equivalentes</em> (anotaciones que no se evalúan,
+defaults None falsy≡False, ruido de epsilon ±1e-9 sub-nanodólar, o mutantes no-viables que rompen el import
+y mutmut malclasifica — excluidos con <span class="mono"># pragma: no mutate</span> justificado). Ningún mutante
+de comportamiento sobrevive.</p>
+<h3>8.3 — Tres niveles de fidelidad pre-prod</h3>
+<ol>
+  <li><strong>Emuladores</strong> (MockBitsoAPI, FakeExchange) — contrato HTTP, milisegundos.</li>
+  <li><strong>Mercado sintético</strong> — jump-diffusion con regímenes (calm/storm/crash), stress de volatilidad.</li>
+  <li><strong>BD de datos reales</strong> (<span class="mono">marketlab</span>) — candles/funding/L2 reales de
+      Hyperliquid + modelo de fills walking-the-book.</li>
+</ol>
+<p>Pipeline CI: GitHub Actions (matriz 3.11/3.12 + job de mutación), Docker, docker-compose + SonarQube.</p>
+
+<h2>9 · Estado en vivo</h2>
+<ul>
+  <li><strong>Bitso (spot):</strong> primera operación real ejecutada + reconciliada (20 MXN, BTC). Cadena completa
+      probada: firma HMAC → IP-allowlist → place → reconcile → <strong>fee-en-base verificada contra dinero real</strong>.
+      Key trade-only / no-withdraw / IP-locked al VPS.</li>
+  <li><strong>Hyperliquid (perps):</strong> <span class="ok">RIEL DE EJECUCIÓN PROBADO END-TO-END.</span> Primera orden
+      real: BUY $11 ETH (0.0063 @ $1755.40) → reconcile por cloid → close reduce-only → flat. <strong>Round-trip completo
+      por $0.02</strong> (1¢ fees + 1¢ drift de precio); colateral $19.85 intacto. El rail test atrapó un bug real (size
+      sin redondear) <strong>ANTES</strong> de mover dinero — el SDK lo rechazó pre-POST y la idempotencia + reconcile
+      sostuvieron (cero posición, cero duplicado). Confirmó que la cuenta unificada respalda perps desde el USDC de spot.
+      La agent key vive solo en el VPS.</li>
+  <li><strong>Shadow:</strong> 10 track records (5 funding-carry + 5 basis, monedas BTC/ETH/SOL/AVAX/ARB) en vivo,
+      keyless, horario, automático en el VPS. Status on-demand vía <span class="mono">shadow_status.py</span>.</li>
+</ul>
+<div class="callout good"><strong>Dos ejes separados, no confundir.</strong> El <strong>RIEL</strong> de ejecución está
+PROBADO y de-riesgado (real, $0.02). El <strong>EDGE</strong> de estrategia NO está confirmado — eso lo decide el shadow
+con <em>tiempo de mercado</em>, no con más trades. Abrir posiciones sin señal valida el riel (ya hecho), nunca la
+estrategia (sería apostar con EV negativo).</div>
+
+<h2>10 · Limitaciones honestas y veredicto</h2>
+<div class="callout"><strong>Ninguna estrategia ha pasado los gates todavía.</strong> Funding-carry y pairs fueron
+ambas RECHAZADAS (DSR bajo, ruina estresada alta). El bot, hoy, <strong>no operaría nada</strong> en vivo. No hay
+"máquina de dinero encendida".</div>
+<ul>
+  <li><strong>Los edges retail son delgados:</strong> ~3-4% APR (funding-carry), Sharpe OOS ~0.69 (pairs).
+      <span class="no">NO 15-20% mensual</span> — ese número es señal de Ponzi, no de trading.</li>
+  <li><strong>El microarbitraje "centavos por segundo" fue desmentido</strong> (deep-research de 106 agentes):
+      spread real ~0.025%, ventana 146 ms solo-HFT, y el pitch textual = la firma del Ponzi Trade Coin Club ($295M).</li>
+  <li><strong>El valor del sistema NO es retorno</strong>, es: honestidad (rechaza lo malo), control (auto-custodia,
+      código auditable), y aprendizaje (entiendes y dueñas la máquina).</li>
+</ul>
+<p class="lead">treasuryforge ya no intenta demostrar que puede ganar dinero. Demuestra que <strong>puede no hacer
+estupideces</strong>. Primero sobrevives; luego mides; luego rechazas casi todo; luego, si un edge sobrevive en
+vivo, le das micro-capital; después, quizá, escalas.</p>
+
+<h2 class="pb">11 · Inventario de módulos</h2>
+<table>
+  <tr><th>Módulo</th><th>Responsabilidad</th></tr>
+  <tr><td><span class="mono">types, agent, policy, executor, wallet, runner, market</span></td><td>núcleo del simulador (validado)</td></tr>
+  <tr><td><span class="mono">journal, audit</span></td><td>WAL crash-safe + log con hash-chain HMAC</td></tr>
+  <tr><td><span class="mono">sizing, backtest/{metrics, cost, cv, funding_backtest, pairs_backtest, mr_scalp_backtest}</span></td><td>dimensionamiento + backtesting con gates</td></tr>
+  <tr><td><span class="mono">risk/{ruin, stages, drift, graveyard, live_gap, provenance, report}</span></td><td>tribunal de riesgo + gobernanza</td></tr>
+  <tr><td><span class="mono">signals/{funding, cointegration, pairs, regime, basis, mr_scalp, linalg}</span></td><td>señales mecánicas + regime-gating</td></tr>
+  <tr><td><span class="mono">exchanges/bitso/{signer, errors, executor, client, transport, mock, validation}</span></td><td>adaptador Bitso (live)</td></tr>
+  <tr><td><span class="mono">exchanges/hyperliquid/{info, executor, wire, signer, live_executor, secrets}</span></td><td>adaptador Hyperliquid (riel de ejecución probado)</td></tr>
+  <tr><td><span class="mono">orders, watchdog, preflight, staleness</span></td><td>capa de seguridad de ejecución</td></tr>
+  <tr><td><span class="mono">live, service, run_live</span></td><td>supervisor + proceso fail-closed + entrypoint</td></tr>
+  <tr><td><span class="mono">shadow, shadow_basis</span></td><td>paper-trading en vivo (funding + basis, sin fondos)</td></tr>
+  <tr><td><span class="mono">marketlab/{store, synthetic, fills}</span></td><td>BD de mercado + sintético + fills</td></tr>
+  <tr><td><span class="mono">deploy/*.service, *.timer</span></td><td>unidades systemd (servicio 24/7 + shadow horario)</td></tr>
+</table>
+
+<h2 class="pb">12 · Motor "carry-engine": investigación y cross-venue (2026-06)</h2>
+<p class="lead">Reframe de "trading bot" a <strong>motor de carry + plataforma de validación</strong>. El cuello
+de botella no es el riel (probado, $0.02 round-trip), es el <strong>edge neto validado en vivo</strong>.
+Cada feature = hipótesis con gate de matar/quedarse (ver <span class="mono">ROADMAP.md</span>).</p>
+<h3>12.1 — La cadena de investigación (cada capa redujo incertidumbre con datos)</h3>
+<table>
+  <tr><th>Capa</th><th>Herramienta</th><th>Veredicto honesto</th></tr>
+  <tr><td>A · Medición</td><td><span class="mono">pnl_decomposition, fill_model, carry_screener</span></td>
+      <td>el net negativo = <strong>fee-bleed por churn</strong> (fees 10-64× el funding)</td></tr>
+  <tr><td>B1 · Universo</td><td><span class="mono">universe.py</span> (230 perps)</td>
+      <td>HL capea funding en +10.95%; el costo NO ata a hold largo; <strong>la persistencia sí</strong></td></tr>
+  <tr><td>C · Persistencia</td><td><span class="mono">funding_persistence.py</span></td>
+      <td>el funding CHOPEA: mediana de episodio 6-25h, solo 6-50% llega a break-even (~40h)</td></tr>
+  <tr><td>C2 · Predicción</td><td><span class="mono">funding_predictor.py</span></td>
+      <td>el chop es seleccionable: age-rule 17→39% y coin-selection 11→27% <strong>OOS</strong></td></tr>
+  <tr><td>Backtest econ.</td><td><span class="mono">carry_backtest.py</span></td>
+      <td>fresh = <span class="no">−185 bps</span> (ruina); age-rule = <span class="warn">+4 bps</span> (break-even, DSR 0)</td></tr>
+</table>
+<div class="callout"><strong>Carry single-venue: SIN edge desplegable.</strong> El mejor selector solo llega a
+break-even; su valor es <em>evitar la ruina</em>, no ganar. Investigación cerrada con datos.</div>
+<h3>12.2 — Cross-venue: el primer candidato que sobrevive la rigor</h3>
+<p><span class="mono">cross_venue.py</span> midió spreads de funding HL-vs-otro venue (delta-neutral: short el
+de funding alto, long el bajo). De 57 PAPER snapshot, la rigor (liquidez en ambos + persistencia + costo
+real) dejó <strong>2 coins líquidos: XRP y ZEC</strong>. Verificación cruda: el perp de XRP en HL tiene funding
+<strong>persistente ~−30% APR</strong> mientras Binance/OKX están en ~0 — spread real ~30% gross, venue-agnóstico
+(<strong>HL es el outlier estructural</strong>). <span class="good"></span> Por qué persiste = <strong>la fricción es el
+foso</strong> (cuentas+colateral en 2 venues ≈ 2× capital, liquidación cruzada, KYC). Hallazgo: <strong>Binance
+geo-bloqueado desde el VPS (451) → OKX</strong> (alcanzable, mismo spread). Real pero operacionalmente duro; NO
+desplegable aún (falta modelar economía dual + forward-shadow).</p>
+<h3>12.3 — Shadows activos (paper, $0, horario en VPS) y pronóstico</h3>
+<table>
+  <tr><th>#</th><th>Shadow</th><th>Estado</th><th>Pronóstico / ETA de validación</th></tr>
+  <tr><td>1</td><td><strong>Cross-venue XRP</strong> (HL−OKX)</td><td><span class="ok">EL MÁS PROMETEDOR</span> — spread ~30%, sobrevivió toda la rigor; forward-test recién iniciado (age-rule esperando 24h)</td>
+      <td><strong>2-4 semanas</strong> para confirmar persistencia + carry neto positivo en vivo</td></tr>
+  <tr><td>2</td><td>Cross-venue ZEC</td><td>spread ~33% pero la pata OKX/Binance es volátil (menos limpio)</td><td>2-4 semanas; vigilar estabilidad de la 2ª pata</td></tr>
+  <tr><td>3</td><td>Funding-carry × 11 coins</td><td>todos net negativo (−0.05 a −0.24%), cost/grs 1200-6400%; age-rule ahora gateando entradas</td><td>~1-2 días para DSR; ya sabido ≈break-even (confirmación)</td></tr>
+  <tr><td>4</td><td>Basis spot-perp × 11</td><td>casi todos 0-held (backwardation); sin edge en el régimen actual</td><td>espera contango; sin ETA de edge</td></tr>
+</table>
+<p class="small">Mejoras detectadas en los shadows: (a) validar forward que el age-rule evita el churn en vivo;
+(b) modelar economía real cross-venue (colateral dual + liquidación) para el APR neto sobre capital;
+(c) ampliar el escaneo cross-venue a más venues alcanzables.</p>
+<h3>12.4 — Calidad (5 procesos + mutación)</h3>
+<p>Escaneo unificado: <strong>724 tests verdes</strong>, ruff/mypy strict limpios, bandit 0 issues de severidad
+media+, cobertura <strong>93.0%</strong>, pip-audit sin CVEs.</p>
+<p><strong>Gate de mutación: COMPLETO — los 28 componentes ≥85%</strong> (mutmut 2.5.1 en VPS, gate
+<span class="mono">scripts/mutation.sh</span>). El grind multi-pase cerró los 12 componentes de analítica que
+faltaban; cada survivor restante es un <strong>mutante equivalente</strong> (anotaciones <span class="mono">| None</span>,
+epsilon 1e-12/2e-12, <span class="mono">*(period−1)</span> con period=2) — no se fuerzan, sería falsear el gate.</p>
+<table>
+  <tr><th>Componente</th><th>Score</th><th>Componente</th><th>Score</th><th>Componente</th><th>Score</th></tr>
+  <tr><td>service</td><td><span class="good">100%</span></td><td>policy</td><td>94%</td><td>fill_model</td><td>87%</td></tr>
+  <tr><td>drift</td><td>98%</td><td>watchdog</td><td>94%</td><td>universe</td><td>87%</td></tr>
+  <tr><td>metrics</td><td>97%</td><td>preflight</td><td>92%</td><td>carry_backtest</td><td>86%</td></tr>
+  <tr><td>live</td><td>97%</td><td>mr_scalp</td><td>92%</td><td>pnl_decomp</td><td>85%</td></tr>
+  <tr><td>ruin</td><td>96%</td><td>carry_screener</td><td>91%</td><td>regime</td><td>85%</td></tr>
+  <tr><td>sizing</td><td>96%</td><td>graveyard</td><td>90%</td><td>—</td><td>—</td></tr>
+  <tr><td>basis</td><td>96%</td><td>orders</td><td>90%</td><td>—</td><td>—</td></tr>
+  <tr><td>run_live</td><td>95%</td><td>staleness</td><td>90%</td><td>—</td><td>—</td></tr>
+  <tr><td>shadow</td><td>95%</td><td>cross_venue</td><td>89%</td><td>—</td><td>—</td></tr>
+  <tr><td>live_gap</td><td>94%</td><td>shadow_basis</td><td>89%</td><td>—</td><td>—</td></tr>
+  <tr><td>funding_persist</td><td>93%</td><td>funding_predict</td><td>89%</td><td>stages</td><td>88%</td></tr>
+</table>
+<p class="small">Patrones de kill usados: tests frozen (FrozenInstanceError), render exacto por línea
+(el substring deja vivir el wrap <span class="mono">XX…XX</span>), boundaries inclusivos (≥ vs &gt;), pins de
+defaults, acumulación <span class="mono">+=</span> verificada en 2+ ciclos, RSI-Wilder y varianza con valores
+exactos calculados a mano, pearson con un lado plano (mata <span class="mono">and→or</span>).</p>
+
+<h3>12.5 — Status en vivo del forward-test (snapshot 2026-06-18 19:47 CEST)</h3>
+<p>Primeras ~20h de acumulación (logger 5-min, 35 muestras; shadows horarios). <strong>El forward-test ya
+entregó su mayor valor: demostró que el spread es violentamente regime-dependiente — exactamente la incertidumbre
+que mataría capital ciego.</strong></p>
+<table>
+  <tr><th>Shadow</th><th>Observación en vivo</th><th>Lectura honesta</th></tr>
+  <tr><td><strong>Cross-venue XRP</strong></td>
+      <td>spread osciló <strong>~30% → 1.1% → 19% → 5% APR en un solo día</strong> (HL flipeó de −15% a +10.9%); <strong>0 entradas</strong></td>
+      <td>el snapshot inicial <span class="no">mentía</span>; el edge no es un nivel, es un <strong>duty-cycle</strong> — la pregunta queen es <em>qué fracción del mes el spread supera el break-even neto</em>, no el pico</td></tr>
+  <tr><td>Cross-venue ZEC</td><td>spread ~16.75% APR (más estable que XRP hoy); sin entrar</td><td>acumulando; la 2ª pata se ve menos errática de lo temido</td></tr>
+  <tr><td>Funding-carry ETH</td><td>35 obs → <strong>Sharpe −32.8, DSR 0.000</strong> (primer DSR real)</td>
+      <td><span class="no">SIN edge confirmado</span> con números, como predijo el backtest económico</td></tr>
+  <tr><td>Funding-carry ×11</td><td>todos net-negativo (−0.04 a −0.24%), cost/grs 263-6400%; el age-rule gatea entradas nuevas</td><td>≈break-even at best; control negativo sano</td></tr>
+  <tr><td>Basis ×11</td><td>casi todos 0-held (backwardation); algunos whipsaws −0.08 a −0.32%</td><td>sin edge en el régimen actual; espera contango</td></tr>
+</table>
+<div class="callout"><strong>El candidato #1 (XRP) probó que su spread no es constante — swing de 30× en 24h.</strong>
+Sigue siendo el mejor que tenemos, pero la barra es clara: el valor está en el <strong>duty-cycle</strong>
+(<span class="mono">opportunity_duty_cycle.py</span>) cruzado con el <strong>break-even neto real</strong>
+(<span class="mono">cross_venue_economics.py</span>, queen metric). ETA sin cambios: <strong>2-4 semanas</strong> de
+acumulación para medir la distribución. Nada que tocar — el sistema mide la verdad solo, sin riesgo de capital.</div>
+
+<h3>12.6 — Métrica reina endurecida (el "cost stack" completo, 2026-06-18)</h3>
+<p>El break-even anterior era ingenuo (solo fees + hedge + orphan). Se modelaron las <strong>5 fricciones que
+faltaban</strong>, en su nivel de cuenta correcto:</p>
+<table>
+  <tr><th>Fricción</th><th>Nivel</th><th>Default</th><th>Por qué</th></tr>
+  <tr><td>funding settlement drag</td><td>notional</td><td>0.5% APR</td><td>HL liquida funding por hora, OKX cada 8h → slip de timing</td></tr>
+  <tr><td>downtime haircut</td><td>notional</td><td>0.5% APR</td><td>relay/sistema caído → funding perdido o tardío</td></tr>
+  <tr><td><strong>costo de oportunidad</strong></td><td>capital</td><td>4.0% APR</td><td>el rendimiento libre de riesgo (T-bills) que el capital bloqueado deja de ganar — <strong>el grande</strong></td></tr>
+  <tr><td>exchange tail risk</td><td>capital</td><td>1.0% APR</td><td>prima por freeze/insolvencia del venue sobre fondos bloqueados</td></tr>
+  <tr><td>transfer delay</td><td>one-time</td><td>1 día</td><td>capital en tránsito entre venues → costo de oportunidad durante el movimiento</td></tr>
+</table>
+<p>Las de nivel-capital se cobran sobre <em>todo</em> el capital bloqueado (~1.5× notional), no sobre el notional:
+<span class="mono">net_on_capital = net_funding/locked_ratio − (opp+exch)·locked_ratio</span>.</p>
+<div class="callout"><strong>Impacto: el floor honesto sube de ~3.4% a ~15.6% APR a 1 año (~19.8% a 30 días).</strong>
+Incluso con el spread en su pico de 30% sostenido 30 días, la métrica reina da solo <strong>~6.8% sobre capital
+total</strong>. Y como el spread vivo de XRP barre 0.7%–30%, la pregunta deja de ser "¿está el spread arriba de 0?"
+y pasa a ser <strong>"¿qué fracción del mes está arriba de ~16% APR?"</strong> — una barra mucho más alta y mucho
+más honesta. Esto <em>baja</em> la probabilidad de desplegar, que es exactamente para lo que sirve.</div>
+
+<h2 class="pb">13 · Subsistema momentum y el gate de validación profunda (2026-06-19)</h2>
+<p class="lead">Idea oportunista de Christian: detectar un pump de precio, entrar direccional, cabalgar la
+tendencia y salir en la reversión por trailing. A diferencia del carry, es <strong>una sola pata
+(~0.13% round-trip) y hold de horas</strong> — el costo NO lo mata. Se codificó como regla mecánica
+(<span class="mono">MOMENTUM_IGNITION_V1</span>: ignición X%/1m + confirmación → long → salida por trailing/stop)
+y se sometió al gate honesto <em>antes</em> de cualquier capital.</p>
+<h3>13.1 — Metodología: profundizar, no enterrar al primer número</h3>
+<p>Un vistazo superficial (7 trades, +4%) <em>insinuó</em> edge. El gate profundo lo juzgó de verdad:
+<strong>3.84 millones de barras 1-min reales</strong> (29 monedas × 3 meses, <span class="mono">data.binance.vision</span>),
+un <strong>sweep de 48 configuraciones</strong>, y tres pruebas de robustez: <strong>DSR</strong> (Deflated Sharpe,
+Bailey–López de Prado, deflacta por el nº de configs probadas = guardia anti-curve-fit), <strong>estabilidad por
+sub-período</strong> (mes a mes) y <strong>desglose por moneda</strong>.</p>
+<h3>13.2 — El top-line seductor, demolido por la robustez</h3>
+<p>La mejor config rindió <strong>+95% total, +1.49%/trade, profit factor 1.88</strong>. Detenerse ahí = autoengaño.
+Las tres pruebas la destruyen:</p>
+<table>
+  <tr><th>Prueba</th><th>Resultado</th><th>Lectura</th></tr>
+  <tr><td><strong>DSR</strong> (gate &gt;0.95)</td><td><span class="no">0.507</span></td>
+      <td>tras deflactar por 34 trials, la mejor config está <strong>dentro de lo que el azar produce</strong> — es sesgo de selección, no edge</td></tr>
+  <tr><td>Estabilidad sub-período</td><td>mar +1.56% · abr +2.87% · <span class="no">may −1.34%</span></td>
+      <td>el "edge" <strong>se voltea a pérdida</strong> en el 3er mes — ajuste a 2 meses que se rompió</td></tr>
+  <tr><td>Desglose por moneda</td><td>ORDI +104% (19/64 trades); el resto ~0</td>
+      <td>todo el resultado es <strong>UNA moneda</strong>; quitas ORDI y se evapora</td></tr>
+</table>
+<div class="callout"><strong>VEREDICTO: <span class="mono">MOMENTUM_IGNITION_V1</span> NO validado — y el sistema funcionó.</strong>
+El vistazo de 7 trades decía "se ve bien"; el gate profundo reveló un curve-fit que habría perdido en mayo. Esto es
+exactamente para lo que existe toda la infraestructura: <strong>protegió de desplegar capital en un espejismo.</strong></div>
+<h3>13.3 — No enterrado: el aprendizaje → V2</h3>
+<p>El test no solo dijo "no", mostró <em>dónde vive la señal</em>: en <strong>monedas y regímenes de alta
+volatilidad</strong> (ORDI; mar/abr no may). La regla incondicional la lava con ruido. La literatura coincide: el
+momentum <strong>vol-escalado/condicionado por régimen (TSMOM)</strong> es el de Sharpe ~0.65 documentado, no el
+pump-chasing crudo. Hipótesis <strong>V2</strong>: momentum vol-condicionado (dirección = signo del retorno trailing,
+tamaño = target_vol/vol realizada, posición continua en barras horarias).</p>
+<h3>13.4 — V2 (TSMOM vol-escalado): también RECHAZADO, más decisivamente</h3>
+<p>Mismo gate (30 monedas × 3 meses, resample horario, sweep de 48 configs, DSR + estabilidad):</p>
+<table>
+  <tr><th>Métrica</th><th>V1 (ignición)</th><th>V2 (TSMOM)</th></tr>
+  <tr><td><strong>DSR</strong> (gate &gt;0.95)</td><td><span class="no">0.507</span></td><td><span class="no">0.083</span></td></tr>
+  <tr><td>Mejor config (net)</td><td>+95% (1 moneda)</td><td><span class="no">−3%</span> (Sharpe 0.28)</td></tr>
+  <tr><td>Long/short</td><td>—</td><td>peor aún (−24% a −29%)</td></tr>
+</table>
+<div class="callout"><strong>VEREDICTO: momentum NO es un edge validado para treasuryforge con los datos disponibles.</strong>
+Ni la forma cruda (V1) ni la vol-escalada con respaldo en literatura (V2) cruzan el DSR. El ~0.65 Sharpe de TSMOM
+es un fenómeno <strong>multi-año, multi-activo</strong> (décadas de futuros de commodities/bonos/FX); 3 meses de perps
+cripto no lo reproducen. Honestidad sobre la prueba misma: 3 meses es muestra corta para una estrategia de tendencia
+— pero incluso dándole el juicio más justo (30 monedas, 48 configs), el mejor pierde dinero y su DSR es 0.083. <strong>No
+merece capital.</strong> Se revisitaría solo con años de historia (BTC/ETH la tienen) a horizonte diario, con el prior
+ya doblemente escéptico. Módulos: <span class="mono">signals/momentum.py</span>, <span class="mono">signals/tsmom.py</span>,
+backtests + validators, 19 tests. <strong>Enterrado con evidencia robusta — exactamente como debe ser.</strong></div>
+
+<p class="small" style="margin-top:18px; border-top:1px solid #ccc; padding-top:8px;">
+Generado para revisión técnica · treasuryforge · rama <span class="mono">harden/mutation-coverage</span> ·
+2026-06-19 · 757 tests · cobertura 93% · mutación 28/28 ≥85% · queen-metric con cost-stack · momentum V1+V2 rechazados por DSR ·
+core stdlib-only · seguridad: llaves nunca por chat, keys trade-only/no-withdraw, nunca tocar fondos de terceros.</p>
+
+</body>
+</html>

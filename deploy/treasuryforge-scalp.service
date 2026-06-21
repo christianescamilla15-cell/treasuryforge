@@ -1,0 +1,30 @@
+[Unit]
+Description=treasuryforge autonomous scalp trader (momentum-ignition, ARMED LIVE; size caps widened)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+# ARMED LIVE (real money) -- OWNER DECISION on owner funds. Trades autonomously at --tier of
+# collateral per gated signal. The two SIZE caps are deliberately widened (--max-notional-pct,
+# --max-spend-pct) so a tier above the default 20% is permitted at a small bankroll. The OTHER
+# six policy rules stay live (kill-switch, circuit-breaker 10% DD, staleness, allowlist,
+# rate-limit, solvency) and the deployment gate (DSR>=0.60) + committee still govern WHAT trades
+# -- so nothing fires until a strategy clears them (none does today).
+# Caps anchor to collateral at PROCESS START: to change bankroll, restart the service.
+# To return to PAPER: remove --arm and comment out EnvironmentFile.
+ExecStart=/opt/treasuryforge/.venv/bin/python scripts/run_autonomous.py --top 50 --min-vol 1200000 --interval 60 --arm --tier 0.55 --max-notional-pct 0.60 --max-spend-pct 0.60
+EnvironmentFile=/etc/treasuryforge/hl.env
+# Telegram creds for IMMEDIATE live alerts (gate-cross / order / policy-block). Optional:
+# if the file is absent systemd would fail to start, so it is marked '-' (ignore if missing).
+-EnvironmentFile=/etc/treasuryforge/telegram.env
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/treasuryforge/state
+[Install]
+WantedBy=multi-user.target

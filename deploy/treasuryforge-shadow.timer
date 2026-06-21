@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the funding-carry shadow hourly (matches Hyperliquid's funding interval)
+
+[Timer]
+# systemd forbids inline comments on a value line, so keep notes on their own lines:
+#   OnCalendar=hourly       -> one observation at the top of each hour
+#   RandomizedDelaySec=60    -> small jitter so it doesn't fire at exactly :00
+#   Persistent=true          -> if the VPS was down, run once on boot so the cadence resumes
+OnCalendar=hourly
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

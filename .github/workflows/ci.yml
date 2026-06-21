@@ -1,0 +1,82 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt -r requirements-live.txt
+          pip install -e .
+
+      - name: Lint (ruff)
+        run: ruff check treasuryforge tests scripts
+
+      - name: Types (mypy)
+        run: mypy
+
+      - name: Security (bandit + pip-audit)
+        run: |
+          bandit -r treasuryforge -q -ll
+          pip-audit -r requirements-live.txt -r requirements-dev.txt --progress-spinner off
+
+      - name: Tests + coverage
+        run: pytest --cov=treasuryforge --cov-report=xml --cov-report=term -q
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+  mutation-gate:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}   # slow (~tens of min): gate on push, not every PR push
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt -r requirements-live.txt && pip install -e .
+      - name: Mutation kill-score gate (>=85% per component)
+        run: bash scripts/mutation.sh
+
+  sonarqube:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0           # SonarQube needs full history for blame
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Coverage for Sonar
+        run: |
+          pip install -r requirements-dev.txt -r requirements-live.txt && pip install -e .
+          pytest --cov=treasuryforge --cov-report=xml -q
+      - name: SonarQube scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

@@ -1,0 +1,41 @@
+[Unit]
+Description=treasuryforge — fail-closed autonomous crypto treasury agent
+After=network-online.target
+Wants=network-online.target
+# crash-loop cap: at most 3 starts per 10 min, then stop and require a human
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+# Secrets (trade-only/no-withdraw API key, agent key) — root-owned, chmod 600,
+# provisioned on the VPS with deploy/set_secret.sh. NEVER committed to the repo.
+EnvironmentFile=/etc/treasuryforge/treasuryforge.env
+ExecStart=/opt/treasuryforge/.venv/bin/python -m treasuryforge.run_live
+
+# Fail-closed restart policy (exit codes from treasuryforge.service.ServiceExit):
+#   10 SAFE_HALTED — preflight refused; a human must fix the environment.
+#   20 DEAD_MAN    — the dead-man's switch fired; a human must inspect.
+#   30 ERROR       — unexpected fault; restart is SAFE because startup re-runs
+#                    preflight AND reconciles in-flight orders before acting.
+# So we auto-restart ONLY on ERROR; SAFE_HALTED and DEAD_MAN never restart-loop.
+Restart=on-failure
+RestartPreventExitStatus=10 20
+RestartSec=30
+
+# Sandboxing — least privilege.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/treasuryforge/state
+
+# Once the live loop is wired to a funded venue, add a second liveness layer:
+#   Type=notify
+#   WatchdogSec=60        # the loop's beat also sends sd_notify WATCHDOG=1
+
+[Install]
+WantedBy=multi-user.target

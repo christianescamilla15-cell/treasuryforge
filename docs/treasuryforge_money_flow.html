@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>treasuryforge — Flujo de capital real v2</title>
+<style>
+  @page { size: letter; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: #1a1a1a; font-size: 9.4px; line-height: 1.3; margin: 0; }
+  h1 { font-size: 18px; margin: 0 0 1px; }
+  .sub { color: #555; font-size: 9.2px; margin: 0 0 7px; }
+  .lead { background: #0f1b2d; color: #fff; padding: 7px 10px; border-radius: 6px;
+          font-size: 10.6px; margin: 0 0 9px; }
+  .lead b { color: #6cc6ff; }
+  .mono { font-family: "SF Mono", Consolas, monospace; font-size: 8.4px;
+          background: #eef1f5; padding: 0 3px; border-radius: 3px; }
+  .cols { display: flex; gap: 10px; }
+  .flow { flex: 1.18; }
+  .side { flex: 1; }
+  .step { display: flex; gap: 6px; margin-bottom: 4.5px; }
+  .num { flex: 0 0 17px; height: 17px; border-radius: 50%; background: #0f1b2d; color: #fff;
+         font-weight: 700; font-size: 9px; display: flex; align-items: center; justify-content: center; }
+  .num.zero { background: #b00020; }
+  .step .t { font-weight: 700; }
+  .step .d { color: #444; }
+  .step .m { color: #1b6e3c; font-weight: 600; }
+  .box { border: 1px solid #d2d8e0; border-radius: 6px; padding: 6px 9px; margin-bottom: 7px; }
+  .box h3 { margin: 0 0 4px; font-size: 10.2px; }
+  .box.caps { background: #f4f8f4; border-color: #bcd8bf; }
+  .box.gate { background: #eef3fb; border-color: #b9cdea; }
+  .box.brk  { background: #fbf0ef; border-color: #e6bcb8; }
+  .box.safe { background: #fbf7ee; border-color: #e3d3b0; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.8px; }
+  td { padding: 1.5px 0; vertical-align: top; }
+  td.k { color: #444; padding-right: 6px; }
+  td.v { font-weight: 600; text-align: right; white-space: nowrap; }
+  .ramp { font-family: "SF Mono", Consolas, monospace; font-size: 8.6px; font-weight: 600;
+          color: #14532d; margin: 1px 0 3px; }
+  .note { color: #555; font-size: 8.4px; }
+  .rule { background: #0f1b2d; color: #fff; border-radius: 6px; padding: 7px 10px;
+          font-size: 9.6px; margin-top: 1px; }
+  .rule b { color: #6cc6ff; }
+  .queen { background: #1b2e1f; color: #eafff0; border-radius: 6px; padding: 6px 10px;
+           font-size: 9px; margin-top: 7px; }
+  .queen b { color: #8be0a4; }
+  .today { border-left: 3px solid #b00020; padding-left: 8px; margin-top: 7px; font-size: 9px; }
+  .foot { color: #888; font-size: 7.8px; margin-top: 7px; border-top: 1px solid #ddd; padding-top: 4px; }
+</style>
+</head>
+<body>
+  <h1>treasuryforge · Flujo de capital real <span style="font-size:11px;color:#888">v2 — con números duros</span></h1>
+  <p class="sub">De "estrategia validada" a "dinero operando". El dinero entra en gotas, nunca en baldes — y cada escalón es un número, no un criterio.</p>
+
+  <div class="lead">Una frase: <b>validas</b> → <b>microcapital real</b> → <b>live ≈ shadow por semanas</b> → <b>escalas por tier</b> → <b>diversificas solo entre sobrevivientes</b> → <b>kill automático sin nostalgia</b>.</div>
+
+  <div class="cols">
+    <div class="flow">
+      <div class="step"><div class="num zero">0</div><div><span class="t">Hoy — cero validadas, cero operando.</span> <span class="d">Punto de partida honesto.</span></div></div>
+      <div class="step"><div class="num">1</div><div><span class="t">Pasa el gate.</span> <span class="d">Forward-test con los gatillos duros (→ caja). Aparece el</span> <span class="m">primer sobreviviente.</span></div></div>
+      <div class="step"><div class="num">2</div><div><span class="t">Allocator decide CUÁNTO,</span> <span class="d">del bankroll experimental aislado (NO de tus ahorros), por edge + independencia, con tope de su tier.</span></div></div>
+      <div class="step"><div class="num">3</div><div><span class="t">Sizing decide el TAMAÑO.</span> <span class="d">Vol-target (EWMA) + gate de ruina Monte-Carlo. Una racha mala no te arruina.</span></div></div>
+      <div class="step"><div class="num">4</div><div><span class="t">Micro PRIMERO (tier 2%).</span> <span class="d">Metes lo mínimo y verificas: ¿live gana igual que shadow?</span></div></div>
+      <div class="step"><div class="num">5</div><div><span class="t">Agente propone → política dispone → wallet ejecuta.</span> <span class="d">8 reglas duras + breakers. Tú mueves los fondos; llaves trade-only.</span></div></div>
+      <div class="step"><div class="num">6</div><div><span class="t">Live ≈ shadow por semanas → subes de tier</span> <span class="d">(2%→5%→12%…), avanzando solo con tiempo Y eventos. Live peor → micro o kill.</span></div></div>
+      <div class="step"><div class="num">7</div><div><span class="t">Varios sobrevivientes → reparto por independencia.</span> <span class="m">ESO es "maximizar ganancias" — solo entre las que ganan.</span></div></div>
+      <div class="step"><div class="num">8</div><div><span class="t">Monitoreo + kill automático.</span> <span class="d">graveyard / drift / live-gap. Pierde su capital sola si se degrada.</span></div></div>
+      <div class="rule" style="margin-top:6px">Regla de oro: <b>nunca pasas de "idea" a "capital serio" en un salto.</b> Embudo siempre — papel → micro → live≈shadow → tier por tier — con topes que hacen el peor caso <b>una pérdida chica controlada, nunca la cuenta.</b></div>
+    </div>
+
+    <div class="side">
+      <div class="box caps">
+        <h3>Topes por madurez (ramp)</h3>
+        <div class="ramp">micro 2% › small 5% › normal 12% › excep. 20% › maduro 25%</div>
+        <div class="note">25% solo tras MESES live. Avanzar de tier exige <b>tiempo Y eventos</b> (no verse bien una vez). <b>Bankroll aislado:</b> patrimonio → ahorro seguro → <b>bankroll experimental (bolsa chica)</b> → desplegado. "100% desplegado" = 100% de ESA bolsa, nunca de tus ahorros.</div>
+      </div>
+      <div class="box gate">
+        <h3>Gatillos de promoción · TODOS</h3>
+        <table>
+          <tr><td class="k">DSR (live)</td><td class="v">≥ 0.60</td></tr>
+          <tr><td class="k">Net APR (sobre break-even)</td><td class="v">≥ 5%</td></tr>
+          <tr><td class="k">Eventos · días</td><td class="v">≥ 30 · ≥ 14</td></tr>
+          <tr><td class="k">Duty-cycle sobre floor</td><td class="v">≥ umbral</td></tr>
+          <tr><td class="k">Slippage real</td><td class="v">≤ modelado ×1.5</td></tr>
+          <tr><td class="k">Live vs shadow</td><td class="v">≥ shadow − 2σ</td></tr>
+        </table>
+      </div>
+      <div class="box brk">
+        <h3>Circuit breakers (velocidad)</h3>
+        <table>
+          <tr><td class="k">Pérdida diaria</td><td class="v">−2% → pausa</td></tr>
+          <tr><td class="k">Semanal · mensual</td><td class="v">−5% · −10%</td></tr>
+          <tr><td class="k">Cooldown tras kill</td><td class="v">7 días</td></tr>
+          <tr><td class="k">Errores op · live-gap</td><td class="v">≥3 · &gt;30%</td></tr>
+        </table>
+      </div>
+      <div class="box safe">
+        <h3>Red de seguridad</h3>
+        <div class="note">topes + ruin · idempotencia · staleness + preflight fail-closed · dead-man switch · graveyard auto-kill</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="queen">Métrica reina (cross-venue, obligatoria): <b>NO spread bruto.</b> Es el <b>APR neto sobre el capital TOTAL bloqueado</b> (las DOS patas/venues), ajustado por duty-cycle, fees, slippage, funding, <b>colateral duplicado, riesgo de liquidación y downtime.</b> El retorno se calcula sobre ambos lados, no sobre la pata bonita.</div>
+
+  <div class="today"><b>Hoy estás en el paso 0.</b> En validación: <span class="mono">cross-venue</span> (forward-test 3-venue corriendo) y tu <span class="mono">selección de moonshots</span> (detector + scorecard, decide a ≥20 picks). Cuando uno pase los gatillos → paso 1, tier micro (2%), del bankroll experimental, no antes.</div>
+
+  <div class="foot">treasuryforge · flujo de capital v2 · módulos: <span class="mono">maturity.py · promotion_gate.py · loss_limits.py · carry_portfolio_allocator.py · sizing.py · ruin.py</span> · el agente PROPONE, la política DISPONE, el wallet EJECUTA dentro de topes · llaves trade-only/no-withdraw, el usuario mueve los fondos (acción soberana).</div>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Test + quality toolchain (CI). Runtime core stays stdlib-only.
+pytest>=8.0
+pytest-cov>=5.0
+hypothesis>=6.0     # property-based / stateful fuzzing of the policy engine
+
+ruff>=0.6          # lint + import hygiene
+mypy>=1.11         # static types
+bandit>=1.7        # security static analysis
+pip-audit>=2.7     # dependency vulnerability scan
+mutmut==2.5.1      # mutation testing (the "Stryker" of Python) — proves tests catch bugs
+                   # (pinned: 3.x has a broken import; needs Linux/WSL, runs in CI/Docker)

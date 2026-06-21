@@ -1,0 +1,32 @@
+# env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# secrets — NEVER commit keys
+.env
+*.key
+secrets/
+config.local.*
+
+# run artifacts
+*.log
+ledger_*.json
+# local market 'BD' -- rebuild from real data with build_market_db.py
+*.db
+# runtime journals (shadow track record, live order state)
+state/
+
+# CI / quality artifacts
+coverage.xml
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.mutmut-cache
+*.bak          # mutmut writes <file>.bak while mutating; leftover only if a run is killed
+_surv/         # local survivor-diff dumps from scripts/_mut_copy.sh
+*.egg-info/
+build/
+dist/

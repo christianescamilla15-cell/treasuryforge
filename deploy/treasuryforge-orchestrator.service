@@ -1,0 +1,18 @@
+[Unit]
+Description=treasuryforge real-time autonomous orchestrator (gate watch + deploy staging, paper)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+ExecStart=/opt/treasuryforge/.venv/bin/python scripts/run_orchestrator.py --interval 60
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/treasuryforge/state
+[Install]
+WantedBy=multi-user.target

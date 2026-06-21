@@ -1,0 +1,16 @@
+[Unit]
+Description=treasuryforge Telegram status report (read-only push, no orders)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+EnvironmentFile=/etc/treasuryforge/telegram.env
+Environment=PYTHONPATH=/opt/treasuryforge
+ExecStart=/opt/treasuryforge/.venv/bin/python scripts/telegram_report.py
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/treasuryforge

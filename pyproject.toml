@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "treasuryforge"
+version = "0.1.0"
+description = "Local-first autonomous crypto treasury agent + quant risk governance system."
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["treasuryforge*"]
+
+# ---------------------------------------------------------------- pytest ----
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --import-mode=importlib"   # clean discovery of component subdirs
+pythonpath = ["."]                        # import the package in either invocation
+
+# -------------------------------------------------------------- coverage ----
+[tool.coverage.run]
+source = ["treasuryforge"]
+omit = ["*/exchanges/*/transport.py"]   # network shim, exercised only live
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 90            # hard floor: the suite must keep >=90% line coverage
+
+# ------------------------------------------------------------------ ruff ----
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+# stricter: + ruff-native bug catches (RUF) + mccabe complexity gate (C901).
+# (style-only families C4/SIM/PERF/PIE were evaluated and left off — they flag
+# deliberate idioms, e.g. dict(...) fixtures, with no correctness gain.)
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "C901"]
+# E741: single-letter L (leverage)/f (fraction) are deliberate domain names.
+# B905: zip(strict=) not required on 3.11. UP042: str+Enum mixin is intentional
+# (we rely on value == str comparison). RUF003: accented chars in Spanish comments.
+ignore = ["E741", "B905", "UP042", "RUF003"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 14   # the policy engine + ruin MC are inherently branchy; cap the rest
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E731", "F841", "E402", "E501", "E702"]  # lambdas + path-insert + verbose asserts + compact setup ok
+"scripts/*" = ["E731", "E702", "E402", "E501"] # CLI/demo scripts may be terse/wide
+
+# ------------------------------------------------------------------ mypy ----
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true   # hyperliquid SDK / keyring have no stubs
+warn_unused_ignores = true
+no_implicit_optional = true
+# stricter: catch dead casts, stale config, and type-mismatched comparisons
+warn_redundant_casts = true
+warn_unused_configs = true
+strict_equality = true
+files = ["treasuryforge"]
+# pure dynamic boundaries: the HL executor wraps the untyped SDK; the IPv4
+# transport subclasses http.client internals. Typed at the seams, not inside.
+exclude = [
+    "exchanges/hyperliquid/executor\\.py$",
+    "exchanges/bitso/transport\\.py$",
+]

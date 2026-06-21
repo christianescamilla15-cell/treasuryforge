@@ -1,0 +1,20 @@
+[Unit]
+Description=treasuryforge funding-carry shadow — one observation (paper, no funds, no keys)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+# Keyless: Hyperliquid /info is public, so this needs NO secret/EnvironmentFile.
+# Edit --coin / --state-dir below to shadow a different market.
+ExecStart=/opt/treasuryforge/.venv/bin/python scripts/run_shadow.py --coin ETH --state-dir /opt/treasuryforge/state/shadow_eth
+
+# Least privilege: read-only system, write only the track-record journal.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/treasuryforge/state

@@ -1,0 +1,14 @@
+[Unit]
+Description=treasuryforge multi-venue funding-spread logger (8 venues + relay, paper, no funds)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=treasuryforge
+Group=treasuryforge
+WorkingDirectory=/opt/treasuryforge
+ExecStart=/opt/treasuryforge/.venv/bin/python scripts/log_multivenue_spread.py --coins XRP,ZEC --state-prefix /opt/treasuryforge/state/multivenue --relay /opt/treasuryforge/state/relay/funding.json
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/treasuryforge/state

@@ -1,0 +1,2 @@
+# Live / credential path only — NOT needed for the simulation core (which is stdlib-only).
+keyring>=24   # OS keychain (Windows Credential Manager / DPAPI) for the API secret
