@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TreasuryForge — Live Demo · Agent Safety Architecture</title>
+<meta name="description" content="Interactive demo of TreasuryForge's 4-layer agent safety architecture. Watch the Policy Engine intercept and evaluate every agent intent in real time.">
+<meta name="theme-color" content="#0f1828">
+<meta property="og:title" content="TreasuryForge — Live Demo"/>
+<meta property="og:description" content="Watch the Policy Engine evaluate every agent intent in real time. 4 layers, 8 hard rules, crash-safe state."/>
+<link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" href="https://github.com/christianescamilla15-cell/treasuryforge">
+      <span class="brand__mark">🛡</span>
+      <span class="brand__name">TreasuryForge</span>
+      <span class="brand__tag">Live Demo</span>
+    </a>
+    <nav class="topbar__nav">
+      <a href="https://github.com/christianescamilla15-cell/treasuryforge#what-this-proves-for-hiring-managers-reading-the-code">Pitch</a>
+      <a href="https://github.com/christianescamilla15-cell/treasuryforge">Source ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- HERO -->
+  <section class="hero">
+    <p class="eyebrow">Interactive demo · 4-layer agent safety</p>
+    <h1>The policy <em>never</em> trusts the agent.</h1>
+    <p class="lede">
+      Watch a simulated trading agent propose intents in real time. The Policy Engine intercepts every
+      single one and evaluates it against 8 hard rules. Approved intents reach the Executor. Denied
+      intents are logged with the exact rule that fired. The breaker trips on drawdown and stays tripped
+      after a simulated SIGKILL.
+    </p>
+    <div class="ctas">
+      <button id="btn-play" class="btn btn--primary">▶ Run simulation</button>
+      <button id="btn-step" class="btn">Step 1 tick</button>
+      <button id="btn-crash" class="btn btn--danger">⚡ Trigger SIGKILL</button>
+      <button id="btn-reset" class="btn btn--ghost">Reset</button>
+    </div>
+    <p class="hero__hint">
+      Tip: hit <kbd>Run simulation</kbd> to watch the full flow, or step tick-by-tick. The audit chain
+      verifies its own integrity at the bottom.
+    </p>
+  </section>
+
+  <!-- KEY METRICS -->
+  <section class="kpis">
+    <div class="kpi"><div class="kpi__v" id="kpi-tick">0</div><div class="kpi__l">Tick</div></div>
+    <div class="kpi"><div class="kpi__v" id="kpi-intents">0</div><div class="kpi__l">Intents proposed</div></div>
+    <div class="kpi"><div class="kpi__v" id="kpi-allow">0</div><div class="kpi__l">Allowed</div></div>
+    <div class="kpi"><div class="kpi__v" id="kpi-deny">0</div><div class="kpi__l">Denied</div></div>
+    <div class="kpi"><div class="kpi__v" id="kpi-breaker">○ OK</div><div class="kpi__l">Circuit breaker</div></div>
+    <div class="kpi"><div class="kpi__v" id="kpi-equity">$10,000</div><div class="kpi__l">Equity (USD)</div></div>
+  </section>
+
+  <!-- 4-LAYER STACK -->
+  <section class="stack">
+
+    <div class="layer layer--agent">
+      <div class="layer__head">
+        <span class="layer__num">①</span>
+        <div>
+          <h3>AGENT</h3>
+          <p>LLM / strategy / planner — can hallucinate, can be wrong</p>
+        </div>
+      </div>
+      <div class="layer__body">
+        <div class="probe" id="probe-agent">
+          <span class="probe__label">last proposal</span>
+          <pre id="probe-agent-code">(waiting…)</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">↓ Intent</div>
+
+    <div class="layer layer--policy">
+      <div class="layer__head">
+        <span class="layer__num">②</span>
+        <div>
+          <h3>POLICY ENGINE</h3>
+          <p><strong>Does NOT trust the agent.</strong> 8 hard rules in order. Latched state survives SIGKILL.</p>
+        </div>
+      </div>
+      <div class="layer__body">
+        <div class="rules">
+          <div class="rule" data-rule="kill_switch"><span class="rule__n">1</span> kill_switch</div>
+          <div class="rule" data-rule="circuit_breaker"><span class="rule__n">2</span> circuit_breaker</div>
+          <div class="rule" data-rule="staleness"><span class="rule__n">3</span> staleness</div>
+          <div class="rule" data-rule="allowlist"><span class="rule__n">4</span> allowlist</div>
+          <div class="rule" data-rule="per_tx_cap"><span class="rule__n">5</span> per-tx cap</div>
+          <div class="rule" data-rule="rate_limit"><span class="rule__n">6</span> rate_limit</div>
+          <div class="rule" data-rule="spend_budget"><span class="rule__n">7</span> spend_budget</div>
+          <div class="rule" data-rule="solvency"><span class="rule__n">8</span> solvency</div>
+        </div>
+        <div class="probe" id="probe-verdict">
+          <span class="probe__label">verdict</span>
+          <pre id="probe-verdict-code">(no decision yet)</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow arrow--split">
+      <span class="arrow__left">↙ ALLOW</span>
+      <span class="arrow__right">↘ DENY</span>
+    </div>
+
+    <div class="row">
+      <div class="layer layer--exec">
+        <div class="layer__head">
+          <span class="layer__num">③④</span>
+          <div>
+            <h3>EXECUTOR + WALLET</h3>
+            <p>Fills only approved intents. Balance never negative. Never mints value.</p>
+          </div>
+        </div>
+        <div class="layer__body">
+          <div class="wallet" id="wallet">
+            <div class="wallet__row"><span>quote (USD)</span><span id="wallet-quote">10000.00</span></div>
+            <div class="wallet__row"><span>BTC</span><span id="wallet-btc">0.000000</span></div>
+            <div class="wallet__row"><span>ETH</span><span id="wallet-eth">0.000000</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer layer--audit">
+        <div class="layer__head">
+          <span class="layer__num">🔐</span>
+          <div>
+            <h3>TAMPER-EVIDENT AUDIT</h3>
+            <p>HMAC-SHA256 hash chain. Verifies its own integrity walk-forward.</p>
+          </div>
+        </div>
+        <div class="layer__body">
+          <div class="auditstatus" id="auditstatus">
+            <span class="dot dot--ok"></span>
+            <span id="auditstatus-text">chain integrity: OK (0 entries)</span>
+          </div>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <footer class="footer">
+    <p>
+      Live demo of the safety architecture pattern in
+      <a href="https://github.com/christianescamilla15-cell/treasuryforge">github.com/christianescamilla15-cell/treasuryforge</a>.
+      JavaScript port of the policy engine for browser execution. The real implementation is Python with
+      Hypothesis property-based fuzzing over the same 8 invariants.
+    </p>
+    <p>
+      Generalized library: <a href="https://github.com/christianescamilla15-cell/agentguard"><code>agentguard</code></a>
+      · author <a href="https://github.com/christianescamilla15-cell">Christian Hernández Escamilla</a>
+    </p>
+  </footer>
+
+</main>
+
+<script src="./demo.js"></script>
+</body>
+</html>
