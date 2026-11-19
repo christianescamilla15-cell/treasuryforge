@@ -9,12 +9,12 @@ hábiles y publico el arreglo con su aviso. Por favor no abras un issue público
 
 | Revisión | Herramienta | Dónde | Bloquea |
 |---|---|---|---|
-| Análisis estático | CodeQL (Python + JS de la demo) + Semgrep `p/default` | `seguridad.yml` | sí (Semgrep) |
+| Análisis estático | CodeQL (Python + JS de la demo) + Semgrep `p/default` (imagen 1.186.0 fijada por digest) | `seguridad.yml` | sí (Semgrep) |
 | Análisis estático de Python | bandit `-ll` sobre `treasuryforge/` y `api/` | `ci.yml` | sí |
 | Dependencias con versión exacta (lo que se despliega: `api/requirements.txt`) | Trivy fs | `seguridad.yml` | sí, en CRITICAL/HIGH con arreglo publicado |
 | Dependencias por rango (`requirements-dev.txt`, `requirements-live.txt`) y las de la API | pip-audit, en 3.11 y 3.12 | `ci.yml` | sí |
 | Configuración e IaC (`Dockerfile`, `api/Dockerfile`, `docker-compose.yml`) | Trivy config | `seguridad.yml` | sí, en CRITICAL/HIGH |
-| Secretos en toda la historia | gitleaks | `seguridad.yml` y pre-commit | sí |
+| Secretos en toda la historia | gitleaks v8.21.2 (imagen fija; el job exige ver «N commits scanned» en la bitácora) | `seguridad.yml` y pre-commit | sí |
 | Datos de terceros | `herramientas/confidencialidad.py` | `seguridad.yml` y pre-commit | sí |
 | Inventario de componentes | SBOM (syft, SPDX) | `seguridad.yml` | no: se publica con cada versión |
 
@@ -38,6 +38,6 @@ propone las actualizaciones.
 |---|---|---|
 | `# nosemgrep: dynamic-urllib-use-detected` en 48 llamadas de `scripts/` y `treasuryforge/marketlab/store.py` | todas usan una URL base `https://` fija en el código (verificado el 2026-11-19); ya estaban triadas para bandit con `# nosec B310` | si una URL pasa a venir de un argumento o archivo |
 | `# nosemgrep: non-literal-import` en `exchanges/hyperliquid/signer.py` | `importlib` sólo recibe literales del propio módulo (dependencias en cuarentena del VPS) | si `_require` recibe datos externos |
-| Regla `use-defused-xml-parse` excluida en Semgrep | el único XML que se lee es el JUnit que genera el propio job (`herramientas/verificar_reportes.py`, copia literal de la plantilla) | 2027-05-19 |
+| `herramientas/verificar_reportes.py` excluido de Semgrep (sólo ese archivo, no la regla) | copia literal de la plantilla; lee con `xml.etree` el JUnit que genera el propio job: entrada propia, no de terceros | si el archivo empieza a leer XML externo |
 
 Las excepciones de Trivy viven en `.trivyignore`, cada una con fecha de vencimiento y motivo (hoy: ninguna).
