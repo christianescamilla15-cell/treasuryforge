@@ -45,7 +45,8 @@ class SignCheck:
 def _require(modname: str):
     import importlib
     try:
-        return importlib.import_module(modname)
+        # modname is always a literal from this module (eth_account / the HL SDK), never input
+        return importlib.import_module(modname)  # nosemgrep: non-literal-import
     except ImportError as e:   # pragma: no cover - exercised only off-VPS
         raise RuntimeError(
             f"{modname} is required to sign (VPS only). Install the quarantined deps: "

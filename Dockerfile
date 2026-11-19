@@ -16,5 +16,9 @@ COPY tests ./tests
 COPY scripts ./scripts
 RUN pip install -e .
 
+# No corre como root (Trivy DS-0002); la compuerta escribe coverage.xml y cachés en /app.
+RUN useradd --create-home --uid 10001 app && chown -R app /app
+USER app
+
 # default: run the full gate (lint, types, security, deps, tests+coverage)
 CMD ["bash", "scripts/ci.sh"]

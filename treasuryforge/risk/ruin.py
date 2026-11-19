@@ -103,7 +103,7 @@ def monte_carlo_ruin(
     return MonteCarloRuinResult(
         p_ruin=ruin / paths,
         p_liquidation=liq / paths,
-        expected_max_drawdown=sum(dds) / paths,
+        expected_max_drawdown=math.fsum(dds) / paths,
         median_final_multiple=finals[paths // 2],
         dd_threshold_probs={t: thr_hits[t] / paths for t in dd_thresholds},
     )
@@ -111,8 +111,10 @@ def monte_carlo_ruin(
 
 def _moments(returns: Sequence[float]) -> tuple[float, float]:
     n = len(returns)
-    mean = sum(returns) / n
-    var = sum((r - mean) ** 2 for r in returns) / n
+    # fsum, not sum(): the strict gates compare E[r] against a threshold at equality, and
+    # sum() rounds differently on 3.11 vs 3.12 (compensated summation since 3.12).
+    mean = math.fsum(returns) / n
+    var = math.fsum((r - mean) ** 2 for r in returns) / n
     return mean, var
 
 

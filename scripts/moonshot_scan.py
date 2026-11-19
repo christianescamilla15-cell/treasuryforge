@@ -39,7 +39,7 @@ def _smallest_perps(n: int) -> list[str]:
     """The n lowest-24h-volume USDT perps -- the micro-cap universe (pumps + rugs)."""
     req = urllib.request.Request("https://fapi.binance.com/fapi/v1/ticker/24hr",
                                  headers={"User-Agent": "tf/0.1"})
-    data = json.load(urllib.request.urlopen(req, timeout=20))  # nosec B310
+    data = json.load(urllib.request.urlopen(req, timeout=20))  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
     vols = [(d["symbol"][:-4], float(d.get("quoteVolume", 0.0)))
             for d in data if d.get("symbol", "").endswith("USDT")]
     vols = [(c, v) for c, v in vols if v > 0]

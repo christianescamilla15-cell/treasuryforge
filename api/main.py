@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 # Project root is one level up from api/ — required for `from treasuryforge import …`
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from treasuryforge import (  # noqa: E402
+from treasuryforge import (
     AuditLog,
     MarketSimulator,
     MeanReversionAgent,
@@ -35,7 +35,7 @@ from treasuryforge import (  # noqa: E402
     SimWallet,
     verify_chain,
 )
-from treasuryforge.types import Intent, MarketTick, Side  # noqa: E402
+from treasuryforge.types import Intent, MarketTick, Side
 
 # ──────────────────────────────────────────────────────────────────────
 # App
@@ -135,7 +135,7 @@ def root():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "ts": datetime.now(timezone.utc).isoformat()}
+    return {"status": "ok", "ts": datetime.now(UTC).isoformat()}
 
 
 @app.get("/api/stats")
@@ -173,7 +173,7 @@ def policy_evaluate(req: EvaluateRequest):
             max_notional_per_window=o.get("max_notional_per_window"),
         )
     except Exception as e:
-        raise HTTPException(400, f"invalid config: {e}")
+        raise HTTPException(400, f"invalid config: {e}") from e
 
     engine = PolicyEngine(config=cfg)
     side = Side.BUY if req.side.upper() == "BUY" else Side.SELL
@@ -252,9 +252,9 @@ def backtest_run(req: BacktestRequest):
         audit=audit,
     )
 
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     report = runner.run(steps=req.ticks)
-    finished = datetime.now(timezone.utc)
+    finished = datetime.now(UTC)
 
     # Read back the audit log to count entries + verify
     audit_entries: list[dict] = []
@@ -342,4 +342,5 @@ def audit_sample(n: int = 5):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api.main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    # Local run: loopback by default. The container (api/Dockerfile) binds 0.0.0.0 explicitly.
+    uvicorn.run("api.main:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))

@@ -27,7 +27,7 @@ _FUND_PER_YEAR = 3 * 365            # 8-hour funding -> annualised
 
 def _get(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": "treasuryforge-relay/0.1"})
-    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 

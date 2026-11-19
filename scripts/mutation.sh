@@ -3,6 +3,8 @@
 # Linux/Docker only (mutmut needs Linux). Each component is mutated against ITS
 # OWN test suite — the component-organized layout is what makes this meaningful.
 #   docker run --rm treasuryforge:ci bash scripts/mutation.sh
+#   bash scripts/mutation.sh --shard 2/6     # CI: the 2nd of 6 round-robin slices
+#   bash scripts/mutation.sh metrics drift   # only those components
 set -uo pipefail
 THRESHOLD=${MUTATION_THRESHOLD:-85}
 PY=${PY:-python}                 # set PY=/opt/treasuryforge/.venv/bin/python on the VPS
@@ -53,11 +55,19 @@ COMPONENTS=(
   "tsmom_bt  | treasuryforge/tsmom_backtest.py  | tests/core/test_tsmom_backtest.py"
 )
 
-# optional positional args restrict the run to those component names (e.g. `... metrics drift`)
+# --shard K/N runs every N-th component starting at the K-th (round-robin, so a component
+# added to the list is ALWAYS in some shard). Other positional args restrict the run to
+# those component names (e.g. `... metrics drift`).
+SHARD_K=0; SHARD_N=1
+if [ "${1:-}" = "--shard" ]; then
+  SHARD_K=${2%%/*}; SHARD_N=${2##*/}; shift 2
+fi
 WANT=" $* "
 printf '%-11s %7s %9s %7s\n' COMPONENT KILLED SURVIVED SCORE
-fail=0
+fail=0; measured=0; idx=0
 for entry in "${COMPONENTS[@]}"; do
+  idx=$((idx + 1))
+  [ "$SHARD_N" -gt 1 ] && [ $(( (idx - 1) % SHARD_N + 1 )) -ne "$SHARD_K" ] && continue
   IFS='|' read -r name src tests <<< "$entry"
   name=$(echo "$name" | xargs); src=$(echo "$src" | xargs); tests=$(echo "$tests" | xargs)
   [ "$#" -gt 0 ] && [[ "$WANT" != *" $name "* ]] && continue
@@ -68,10 +78,23 @@ for entry in "${COMPONENTS[@]}"; do
   killed=$(echo "$nums" | awk '{print $3}'); killed=${killed:-0}
   surv=$(echo "$nums"   | awk '{print $6}'); surv=${surv:-0}
   total=$((killed + surv))
-  score=100; [ "$total" -gt 0 ] && score=$((100 * killed / total))
+  measured=$((measured + 1))
+  if [ "$total" -eq 0 ]; then
+    # 0 mutants means mutmut did not run (e.g. its baseline test run failed): a gate that
+    # measured nothing must not pass.
+    printf '%-11s %7s %9s %7s\n' "$name" "-" "-" "NO-RUN"
+    fail=1
+    continue
+  fi
+  score=$((100 * killed / total))
   printf '%-11s %7s %9s %6s%%\n' "$name" "$killed" "$surv" "$score"
   [ "$score" -lt "$THRESHOLD" ] && fail=1
 done
+
+if [ "$measured" -eq 0 ]; then
+  echo "MUTATION GATE FAILED: no component selected (shard ${SHARD_K}/${SHARD_N}, filter:${WANT})"
+  exit 1
+fi
 
 echo "-----------------------------------------------"
 if [ "$fail" -eq 0 ]; then

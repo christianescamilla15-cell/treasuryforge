@@ -17,11 +17,13 @@ import os
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
 
-from eth_account import Account
-
+# The eth/SDK deps are quarantined (VPS only): derive the address through the signer's
+# lazy import, so importing this module -- and the test suite -- needs only stdlib.
 from treasuryforge.exchanges.hyperliquid.info import HyperliquidInfo
 from treasuryforge.exchanges.hyperliquid.secrets import resolve_agent_credentials
+from treasuryforge.exchanges.hyperliquid.signer import agent_address_from_key
 from treasuryforge.journal import Journal
 from treasuryforge.relay_feed import load_snapshot
 
@@ -33,7 +35,7 @@ def _post(body: dict) -> dict:
         method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "treasuryforge/0.1"}
     )
-    with urllib.request.urlopen(req, timeout=15) as r:
+    with urllib.request.urlopen(req, timeout=15) as r:  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 
@@ -51,13 +53,14 @@ def _check_api(mode: str) -> bool:
         return False
 
 
-def _check_auth(api_up: bool, info: HyperliquidInfo | None, agent_key: str, master: str) -> bool:
+def _check_auth(api_up: bool, info: HyperliquidInfo | None, agent_key: str, master: str,
+                derive_address: Callable[[str], str] = agent_address_from_key) -> bool:
     if not (api_up and info and master):
         print(" [FAIL] Agent auth check skipped (API down or credentials missing)")
         return False
     print("[..] Checking Agent Key authorization...", end="", flush=True)
     try:
-        agent_address = Account.from_key(agent_key).address
+        agent_address = derive_address(agent_key)
         agents = info.authorized_agents(master)
         # EVM addresses are case-insensitive; HL returns lowercase, Account.from_key returns
         # EIP-55 checksum. Compare case-folded or a valid auth reads as a false [FAIL].
@@ -132,7 +135,8 @@ def check_all(
     mock_info: HyperliquidInfo | None = None,
     mock_agent_key: str | None = None,
     mock_master: str | None = None,
-    tier: float = 0.01
+    tier: float = 0.01,
+    derive_address: Callable[[str], str] = agent_address_from_key,
 ) -> bool:
     if now is None:
         now = int(time.time())
@@ -154,7 +158,7 @@ def check_all(
             print(f" [FAIL] Credentials missing: {e}")
             return False
 
-    auth_ok = _check_auth(api_up, info, agent_key, master)
+    auth_ok = _check_auth(api_up, info, agent_key, master, derive_address)
     collateral = _check_collateral(api_up, info, master)
     relay_ok = _check_relay(relay_path, now)
     latch_ok = _check_latch(state_dir)

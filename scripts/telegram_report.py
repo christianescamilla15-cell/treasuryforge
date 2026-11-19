@@ -91,7 +91,7 @@ def send(text: str) -> bool:
         return False
     data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
-    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return bool(json.loads(r.read().decode()).get("ok", False))
 
 

@@ -22,6 +22,7 @@ you live.'
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -29,7 +30,8 @@ from ..backtest.metrics import sharpe_ratio
 
 
 def _mean(xs: Sequence[float]) -> float:
-    return sum(xs) / len(xs) if xs else 0.0
+    # fsum: exact on every interpreter (3.11's naive sum() drifts at the gate boundaries)
+    return math.fsum(xs) / len(xs) if xs else 0.0
 
 
 @dataclass

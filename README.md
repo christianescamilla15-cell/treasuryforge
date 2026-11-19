@@ -2,10 +2,12 @@
 
 > **Safety architecture for autonomous agents — case study: crypto treasury.** A 4-layer guardrail pattern (Agent → Policy → Executor → Wallet) where the policy engine does NOT trust the agent, paired with crash-safe state, tamper-evident audit chains, and statistically honest validation. The architecture transfers directly to any agentic AI system that takes irreversible actions.
 
+[![ci](https://github.com/christianescamilla15-cell/treasuryforge/actions/workflows/ci.yml/badge.svg)](https://github.com/christianescamilla15-cell/treasuryforge/actions/workflows/ci.yml)
+[![seguridad](https://github.com/christianescamilla15-cell/treasuryforge/actions/workflows/seguridad.yml/badge.svg)](https://github.com/christianescamilla15-cell/treasuryforge/actions/workflows/seguridad.yml)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-77_suites-green.svg)](#tests)
 [![Validation](https://img.shields.io/badge/safety_invariants-Hypothesis_fuzzed-orange.svg)](#)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
 
@@ -88,6 +90,38 @@ python run_demo.py --steps 120                   # normal market
 python run_demo.py --crash --steps 80            # crash → circuit breaker trips
 python run_demo.py --crash --ledger              # print full audit ledger
 ```
+
+## Architecture
+
+C4 model (context → containers → components) in [`docs/arquitectura/`](docs/arquitectura/README.md) and the
+architecture decision records in [`docs/adr/`](docs/adr/): the policy that does not trust the agent, crash-safe
+latched state with a hash-chained audit log, and a stdlib-only core with quarantined signing dependencies.
+
+## How to run
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements-dev.txt -r requirements-live.txt && pip install -e .
+make ci                                          # ruff + mypy + bandit + pip-audit + tests with coverage
+bash scripts/mutation.sh policy orders           # mutation gate for some components (Linux)
+pip install -r api/requirements-dev.txt && python api/main.py   # demo API on http://127.0.0.1:8000/docs
+```
+
+Deployments (static demo on Vercel, demo API on Render, live services on a VPS with systemd), rollback and
+troubleshooting: [`RUNBOOK.md`](RUNBOOK.md).
+
+## Tests
+
+- **One test per business rule**: [`docs/reglas.md`](docs/reglas.md) maps every rule — the 8 policy rules and
+  their order, crash safety, the idempotent-order state machine and the stage ladder, including invalid
+  transitions — to the tests that cover it. That map is the gate; coverage (≥ 90 %) is reported.
+- CI runs the suite on Python 3.11 and 3.12, the demo API contract tests plus a container boot test, and the
+  mutation gate (≥ 85 % killed per component) split in 6 shards.
+
+## Security
+
+See [`SECURITY.md`](SECURITY.md): CodeQL + Semgrep, bandit, Trivy and pip-audit, gitleaks over the whole
+history, a confidentiality filter and an SBOM on every change; every scan must prove it analyzed something.
 
 ## Modules
 

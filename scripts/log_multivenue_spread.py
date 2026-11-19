@@ -36,7 +36,7 @@ def _get(url: str, post: dict | None = None) -> dict:
                                               "User-Agent": "treasuryforge/0.1"})
     else:
         req = urllib.request.Request(url, headers={"User-Agent": "treasuryforge/0.1"})
-    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=15) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 
