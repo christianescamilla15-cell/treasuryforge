@@ -8,10 +8,27 @@ import shutil
 import tempfile
 
 import pytest
-from eth_account import Account
 
-from scripts.preflight_arm import check_all
+from scripts import preflight_arm
 from treasuryforge.journal import Journal
+
+# The eth/SDK deps are quarantined on the VPS (see treasuryforge/exchanges/hyperliquid/signer.py),
+# so the suite must not import eth_account. Golden value, derived ONCE with eth-account 0.13:
+#   Account.from_key("0x" + "a" * 64).address
+# It keeps the real EIP-55 mixed casing that HL's lowercase list must still match.
+_KEY = "0x" + "a" * 64
+_ADDRESS = "0x8fd379246834eac74B8419FfdA202CF8051F7A03"
+
+
+def _derive(agent_key: str) -> str:
+    assert agent_key == _KEY, "only the pinned test key has a golden address"
+    return _ADDRESS
+
+
+def check_all(**kw):
+    kw.setdefault("derive_address", _derive)
+    return preflight_arm.check_all(**kw)
+
 
 
 class MockInfo:
@@ -47,8 +64,8 @@ def arm_env():
 def test_arm_preflight_success(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address
+    agent_key = _KEY
+    agent_address = _derive(agent_key)
     master = "0x" + "b" * 40
 
     mock_info = MockInfo(authorized_list=[agent_address], collateral=1200.0)
@@ -70,8 +87,8 @@ def test_arm_preflight_auth_is_case_insensitive(arm_env):
     # HL returns agent addresses LOWERCASE; Account.from_key returns EIP-55 checksum.
     # A valid authorization must still match despite the case difference (the bug we hit live).
     state_dir, relay_path = arm_env
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address          # checksum casing
+    agent_key = _KEY
+    agent_address = _derive(agent_key)          # checksum casing
     master = "0x" + "b" * 40
     mock_info = MockInfo(authorized_list=[agent_address.lower()], collateral=1200.0)
 
@@ -90,7 +107,7 @@ def test_arm_preflight_auth_is_case_insensitive(arm_env):
 def test_arm_preflight_unauthorized_agent(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
+    agent_key = _KEY
     master = "0x" + "b" * 40
 
     # empty authorized list
@@ -111,8 +128,8 @@ def test_arm_preflight_unauthorized_agent(arm_env):
 def test_arm_preflight_low_collateral(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address
+    agent_key = _KEY
+    agent_address = _derive(agent_key)
     master = "0x" + "b" * 40
 
     # collateral $500 -> 1% is $5 < $10 minimum
@@ -133,8 +150,8 @@ def test_arm_preflight_low_collateral(arm_env):
 def test_arm_preflight_stale_relay(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address
+    agent_key = _KEY
+    agent_address = _derive(agent_key)
     master = "0x" + "b" * 40
 
     mock_info = MockInfo(authorized_list=[agent_address], collateral=1200.0)
@@ -155,8 +172,8 @@ def test_arm_preflight_stale_relay(arm_env):
 def test_arm_preflight_tripped_breaker(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address
+    agent_key = _KEY
+    agent_address = _derive(agent_key)
     master = "0x" + "b" * 40
 
     mock_info = MockInfo(authorized_list=[agent_address], collateral=1200.0)
@@ -180,8 +197,8 @@ def test_arm_preflight_tripped_breaker(arm_env):
 def test_arm_preflight_low_collateral_with_custom_tier(arm_env):
     state_dir, relay_path = arm_env
 
-    agent_key = "0x" + "a" * 64
-    agent_address = Account.from_key(agent_key).address
+    agent_key = _KEY
+    agent_address = _derive(agent_key)
     master = "0x" + "b" * 40
 
     # collateral $500 -> 1% is $5 < $10 minimum (fails by default)
@@ -200,3 +217,24 @@ def test_arm_preflight_low_collateral_with_custom_tier(arm_env):
     )
     assert ok is True
 
+
+
+def test_arm_preflight_fails_closed_without_signing_deps(arm_env):
+    # Off the VPS the quarantined eth deps are absent: the signer raises RuntimeError with the
+    # install hint. The preflight must report NOT safe to arm, never crash or pass.
+    state_dir, relay_path = arm_env
+
+    def _missing(_key: str) -> str:
+        raise RuntimeError("eth_account is required to sign (VPS only)")
+
+    ok = check_all(
+        mode="paper",
+        state_dir=state_dir,
+        relay_path=relay_path,
+        now=100200,
+        mock_info=MockInfo(authorized_list=[_ADDRESS], collateral=1200.0),
+        mock_agent_key=_KEY,
+        mock_master="0x" + "b" * 40,
+        derive_address=_missing,
+    )
+    assert ok is False
