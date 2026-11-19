@@ -55,13 +55,16 @@ def _phi_inv(p: float) -> float:
 
 def _moments(returns: Sequence[float]) -> tuple[float, float, float, float]:
     n = len(returns)
-    mean = sum(returns) / n
-    var = sum((r - mean) ** 2 for r in returns) / n
+    # math.fsum (correctly rounded) instead of sum(): Python 3.12 switched sum() to
+    # compensated summation, so on 3.11 a constant series got a 1e-19 "variance" and a
+    # 5e15 Sharpe. fsum gives the same exact answer on every interpreter.
+    mean = math.fsum(returns) / n
+    var = math.fsum((r - mean) ** 2 for r in returns) / n
     std = math.sqrt(var) if var > 0 else 0.0
     if std == 0:
         return mean, 0.0, 0.0, 3.0
-    skew = sum((r - mean) ** 3 for r in returns) / n / std ** 3
-    kurt = sum((r - mean) ** 4 for r in returns) / n / std ** 4
+    skew = math.fsum((r - mean) ** 3 for r in returns) / n / std ** 3
+    kurt = math.fsum((r - mean) ** 4 for r in returns) / n / std ** 4
     return mean, std, skew, kurt
 
 
@@ -81,9 +84,9 @@ def sortino_ratio(returns: Sequence[float], periods_per_year: int | None = None,
     """Like Sharpe but penalizes only DOWNSIDE deviation (volatility that hurts)."""
     if len(returns) < 2:
         return 0.0
-    mean = sum(returns) / len(returns)
+    mean = math.fsum(returns) / len(returns)
     downside = [min(r - target, 0.0) for r in returns]
-    dd = math.sqrt(sum(d * d for d in downside) / len(returns))
+    dd = math.sqrt(math.fsum(d * d for d in downside) / len(returns))
     if dd == 0:
         return 0.0
     s = (mean - target) / dd
