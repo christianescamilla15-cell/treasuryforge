@@ -14,6 +14,10 @@ COPY treasuryforge /app/treasuryforge
 COPY tests /app/tests
 COPY api /app/api
 
+# No corre como root (Trivy DS-0002): la API sólo lee el código y escribe temporales en /tmp.
+RUN useradd --create-home --uid 10001 app
+USER app
+
 EXPOSE 8000
 
 # Honor Render's $PORT

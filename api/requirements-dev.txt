@@ -1,0 +1,4 @@
+# Pruebas de contrato de la API (CI, job «api»). La API en sí usa requirements.txt.
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27        # transporte de fastapi.testclient.TestClient
