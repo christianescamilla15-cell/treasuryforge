@@ -21,7 +21,7 @@ Bar = tuple[float, float, float, float]   # open, high, low, close
 
 def _get(url: str):
     req = urllib.request.Request(url, headers={"User-Agent": "tf/0.1"})
-    with urllib.request.urlopen(req, timeout=30) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=30) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 

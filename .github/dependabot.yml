@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # núcleo (rangos en requirements-dev.txt / requirements-live.txt)
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }   # no adoptar una versión con menos de 7 días (cadena de suministro)
+    open-pull-requests-limit: 5
+  # API de la demo (versiones exactas: lo que se despliega en Render)
+  - package-ecosystem: pip
+    directory: /api
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }   # no adoptar una versión con menos de 7 días (cadena de suministro)
+    open-pull-requests-limit: 5
+  # imágenes base de Dockerfile (validación) y api/Dockerfile (Render)
+  - package-ecosystem: docker
+    directories: [/, /api]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }   # no adoptar una versión con menos de 7 días (cadena de suministro)
+  # acciones fijadas por SHA: Dependabot sube el SHA y su comentario de versión
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }   # no adoptar una versión con menos de 7 días (cadena de suministro)

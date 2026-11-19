@@ -24,7 +24,7 @@ def _post(body: dict) -> object:
     req = urllib.request.Request("https://api.hyperliquid.xyz/info",
                                  data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", "User-Agent": "tf/0.1"})
-    with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 

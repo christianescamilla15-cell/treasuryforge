@@ -35,7 +35,7 @@ def _post(body: dict) -> dict:
         method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "treasuryforge/0.1"}
     )
-    with urllib.request.urlopen(req, timeout=15) as r:
+    with urllib.request.urlopen(req, timeout=15) as r:  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 

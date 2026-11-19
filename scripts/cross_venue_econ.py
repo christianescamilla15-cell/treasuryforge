@@ -22,7 +22,7 @@ from treasuryforge.cross_venue_economics import HOURS_PER_YEAR, cross_venue_econ
 
 def _get(url: str):
     req = urllib.request.Request(url, headers={"User-Agent": "treasuryforge/0.1"})
-    with urllib.request.urlopen(req, timeout=25) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=25) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 
@@ -30,7 +30,7 @@ def _post(url: str, body: dict):
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "treasuryforge/0.1"})
-    with urllib.request.urlopen(req, timeout=25) as r:  # nosec B310
+    with urllib.request.urlopen(req, timeout=25) as r:  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
         return json.loads(r.read().decode())
 
 

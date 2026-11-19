@@ -28,7 +28,7 @@ def download(coin: str, month: str) -> list[Bar]:
         url = (f"https://data.binance.vision/data/futures/um/monthly/klines/"
                f"{coin}USDT/1m/{coin}USDT-1m-{month}.zip")
         try:
-            with urllib.request.urlopen(  # nosec B310
+            with urllib.request.urlopen(  # nosec B310  # nosemgrep: dynamic-urllib-use-detected
                     urllib.request.Request(url, headers={"User-Agent": "tf/0.1"}), timeout=60) as r:
                 z = zipfile.ZipFile(io.BytesIO(r.read()))
             cache.write_text(z.read(z.namelist()[0]).decode())

@@ -342,4 +342,5 @@ def audit_sample(n: int = 5):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api.main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    # Local run: loopback by default. The container (api/Dockerfile) binds 0.0.0.0 explicitly.
+    uvicorn.run("api.main:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))
