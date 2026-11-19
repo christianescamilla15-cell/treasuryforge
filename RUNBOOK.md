@@ -4,12 +4,16 @@ Hay tres cosas desplegadas y cada una se despliega distinto. Estado verificado e
 
 | Qué | Dónde | Cómo se despliega hoy | Humo |
 |---|---|---|---|
-| Demo estática (`demo/`) | Vercel, proyecto `treasuryforge` → https://treasuryforge.vercel.app | `vercel deploy --prod` desde la raíz (origen «cli»; el proyecto **no** está conectado a Git). Último despliegue a producción: 21-jun-2026 | `herramientas/humo.sh demo https://treasuryforge.vercel.app` → OK el 2026-11-19 |
+| Demo estática (`demo/`) | Vercel, proyecto `treasuryforge` → https://treasuryforge.vercel.app | `vercel deploy demo --prod`: la **carpeta `demo/`** es la raíz del despliegue (origen «cli»; el proyecto **no** está conectado a Git). Último despliegue a producción: 21-jun-2026; sus 5 archivos coinciden byte a byte con `demo/` de `main` (verificado el 2026-11-19) | `herramientas/humo.sh demo https://treasuryforge.vercel.app` → OK el 2026-11-19 |
 | API de la demo (`api/`) | Render, servicio Docker con `api/Dockerfile` → https://treasuryforge-api.onrender.com | build de Render desde el repo; la configuración vive en el tablero de Render (no hay `render.yaml`) | `herramientas/humo.sh api https://treasuryforge-api.onrender.com` → **no verificable** desde la red de esta revisión (todo `*.onrender.com` corta el TLS) |
 | Agente en vivo | VPS propio con systemd (`deploy/*.service`, `deploy/*.timer`) | copia manual (`scp`) + `deploy/setup_on_vps.sh`; ver `deploy/README.md` | `systemctl status treasuryforge*` y `journalctl -u <unidad>` |
 
 Hay un segundo proyecto de Vercel, `ch-demo-treasuryforge`, con protección SSO de Vercel; no se despliega desde
 este repo.
+
+> La `vercel.json` de la **raíz** no es la que usa el despliegue: si se desplegara la raíz, `/` reescribiría a
+> `/demo/index.html`, pero la página pide sus recursos en relativo (`./demo.js`, `./styles.css`) y el navegador
+> los buscaría en `/demo.js` → 404. Se despliega siempre `demo/` (con su propia `demo/vercel.json`).
 
 ## Desplegar
 
@@ -22,7 +26,7 @@ este repo.
 ### Demo (Vercel)
 
 ```bash
-vercel deploy                                   # preview: imprime la URL de la vista previa
+vercel deploy demo                              # preview: imprime la URL de la vista previa
 herramientas/humo.sh demo <url-de-la-preview>   # debe salir con 0
 vercel promote <url-de-la-preview>              # pasa la preview a producción
 herramientas/humo.sh demo https://treasuryforge.vercel.app
