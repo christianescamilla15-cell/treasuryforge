@@ -67,5 +67,5 @@ Sigue `deploy/README.md` (copiar, `setup_on_vps.sh` corre la suite y la escalera
 | `run_live` sale con `SAFE_HALTED` | preflight en rojo: falta `TF_MODE`/`TF_VENUE`, credenciales, reloj o datos viejos | `journalctl -u treasuryforge` lista las verificaciones fallidas; corregir y reiniciar |
 | Sale con `DEAD_MAN` | el ciclo dejó de latir y el *dead-man's switch* disparó (queda con cierre) | no reiniciar en bucle: revisar la causa; el cierre se limpia a mano con `Watchdog.reset()` |
 | `preflight_arm` falla en «Agent Key authorization» | la llave del agente no está autorizada para la cuenta maestra, o faltan `eth-account`/SDK en el VPS | autorizar el agente en el exchange o instalar las dependencias en cuarentena (`pip install hyperliquid-python-sdk eth-account`) |
-| CI: «mutación (fragmento k/6)» en rojo con `NO-RUN` | mutmut no corrió (su corrida base de pruebas falló) | correr `bash scripts/mutation.sh <componente>` en local y arreglar la prueba |
-| CI: un componente < 85 % | una prueba dejó de matar mutantes | `scripts/_show_survivors.sh` muestra los sobrevivientes; reforzar la prueba |
+| CI: «mutación (fragmento k/6)» en rojo con `NO-RUN` | mutmut no corrió (su corrida base de pruebas falló); el log del job trae las últimas líneas de mutmut | correr `bash scripts/mutation.sh <componente>` en local y arreglar la prueba |
+| CI: un componente < 85 % | una prueba dejó de matar mutantes | `bash scripts/mutation.sh --survivors <componente>` muestra el diff de cada mutante vivo; reforzar la prueba |

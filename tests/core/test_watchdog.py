@@ -184,3 +184,66 @@ def test_heartbeat_default_reason_is_empty(tmp_path):
     d = _dms(tmp_path)
     d.beat(now=1.0)
     assert d.read().reason == ""
+
+
+# -- mutation hardening (mutmut 3): what the trip and the reset PERSIST, and how -------
+def test_trip_persists_the_last_beat_time_and_the_reason(tmp_path):
+    # the latched heartbeat keeps WHEN the bot was last alive and WHY it was tripped:
+    # that is what beat() reports when it refuses and what an operator reads
+    d = _dms(tmp_path, timeout=10)
+    d.beat(now=100.0)
+    calls = []
+    d.supervise(now=120.0, on_trip=calls.append)
+    hb = d.read()
+    assert hb.tripped is True and hb.ts == 100.0
+    assert hb.reason == calls[0] == "no heartbeat for 20.0s (> 10.0s timeout)"
+
+
+def test_reset_persists_the_recovery_time_and_an_open_latch(tmp_path):
+    d = _dms(tmp_path, timeout=10)
+    d.beat(now=100.0)
+    d.supervise(now=120.0, on_trip=lambda r: None)
+    hb = d.reset(now=200.0)
+    assert hb.ts == 200.0 and hb.tripped is False
+    assert d.read() == hb
+
+
+def test_heartbeat_is_written_through_a_tmp_file_in_the_same_directory(tmp_path, monkeypatch):
+    # os.replace is only atomic within one filesystem: the temp file must live next to
+    # the heartbeat (not in the system temp dir or the cwd) and be recognizable as .tmp
+    import os
+
+    replaced = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        replaced.append((src, dst))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", spy)
+    d = _dms(tmp_path)
+    d.beat(now=1.0)
+    (src, dst), = replaced
+    assert dst == d.path
+    assert os.path.dirname(src) == os.path.dirname(d.path)
+    assert src.endswith(".tmp")
+
+
+def test_failed_write_leaves_no_tmp_file_and_keeps_the_error(tmp_path, monkeypatch):
+    import os
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    d = _dms(tmp_path)
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError, match="disk full"):
+        d.beat(now=1.0)
+    assert os.listdir(os.path.dirname(d.path)) == []      # the temp file was cleaned up
+    assert d.read() is None                                # and nothing was half-written
+
+
+def test_bare_filename_creates_no_directory(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    DeadMansSwitch("heartbeat.json", timeout_s=10)
+    assert list(tmp_path.iterdir()) == []                  # cwd is reused, nothing created
