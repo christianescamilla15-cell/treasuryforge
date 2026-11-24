@@ -155,3 +155,14 @@ def test_backtest_exact_two_trades_pins_scan_indices():
     r = backtest_momentum(bars, p)
     assert r.n_trades == 2 and r.holds == [3, 1]
     assert r.returns == pytest.approx([0.017868, -0.101], abs=1e-5)
+
+
+def test_sharpe_is_the_metric_of_the_trade_returns_and_annualizes():
+    # mutation hardening (mutmut 3): the result's Sharpe must be computed on ITS returns
+    # and honour the annualization factor it is given
+    from treasuryforge.backtest.metrics import sharpe_ratio
+    from treasuryforge.momentum_backtest import MomentumResult
+    rets = [0.02, -0.01, 0.03, 0.0]
+    r = MomentumResult(returns=rets, holds=[1, 1, 1, 1])
+    assert r.sharpe() == pytest.approx(sharpe_ratio(rets)) and r.sharpe() != 0.0
+    assert r.sharpe(365) == pytest.approx(r.sharpe() * 365 ** 0.5)

@@ -2,10 +2,11 @@
 
 Ésta es la compuerta real del proyecto (más que el % de cobertura): cada regla del dominio tiene al menos una
 prueba que falla si la regla se rompe. Formato `archivo::prueba`. Las pruebas parametrizadas cuentan una vez por
-caso. Las marcadas **(nueva)** se agregaron en la revisión del 2026-11-19.
+caso. Las marcadas **(nueva)** se agregaron en la revisión del 2026-11-19; las **(nueva 24-nov)**, al pasar a
+mutmut 3.
 
-Además de estas pruebas, la puerta de mutación (`scripts/mutation.sh`, ≥ 85 % por componente, 42 componentes)
-comprueba que las pruebas de cada módulo matan las mutaciones de su código.
+Además de estas pruebas, la puerta de mutación (`scripts/mutation.sh` con mutmut 3, ≥ 85 % por componente,
+42 componentes) comprueba que las pruebas de cada módulo matan las mutaciones de su código.
 
 ## 1. Motor de políticas (`treasuryforge/policy.py`) — las 8 reglas duras
 
@@ -58,6 +59,8 @@ comprueba que las pruebas de cada módulo matan las mutaciones de su código.
 | Datos frescos y reloj sano en cada paso (futuro, reloj hacia atrás, deriva) | `tests/core/test_staleness.py::test_stale_data_boundary_is_inclusive` · `tests/core/test_staleness.py::test_future_data_halts` · `tests/core/test_staleness.py::test_wall_clock_backward_halts` · `tests/core/test_staleness.py::test_clock_drift_halts` |
 | El servicio es *fail-closed*: preflight en rojo nunca opera; reconcilia antes del ciclo; error inesperado detiene | `tests/core/test_service.py::test_safe_halted_on_bad_preflight_never_trades` · `tests/core/test_service.py::test_recovers_inflight_order_before_the_loop` · `tests/core/test_service.py::test_fails_closed_on_unexpected_exception` · `tests/core/test_run_live.py::test_main_safe_halts_without_explicit_mode` |
 | En vivo, datos viejos o una negación de la política no colocan nada | `tests/core/test_live.py::test_stale_data_halts_and_places_nothing` · `tests/core/test_live.py::test_policy_denial_blocks_order` |
+| El latido se escribe de forma atómica (temporal `.tmp` junto al archivo, se borra si la escritura falla) y el disparo deja registrado cuándo latió por última vez y por qué se disparó; `reset` reabre el cierre | `tests/core/test_watchdog.py::test_heartbeat_is_written_through_a_tmp_file_in_the_same_directory` **(nueva 24-nov)** · `tests/core/test_watchdog.py::test_failed_write_leaves_no_tmp_file_and_keeps_the_error` **(nueva 24-nov)** · `tests/core/test_watchdog.py::test_trip_persists_the_last_beat_time_and_the_reason` **(nueva 24-nov)** · `tests/core/test_watchdog.py::test_reset_persists_the_recovery_time_and_an_open_latch` **(nueva 24-nov)** |
+| En vivo, cada guarda decide con los datos de ESE paso (ambos relojes, tick y cartera, edad medida de los datos, símbolo y origen de la orden) y el resultado lleva el motivo y el desenlace del gestor de órdenes | `tests/core/test_live.py::test_step_feeds_the_monotonic_clock_to_the_gate` **(nueva 24-nov)** · `tests/core/test_live.py::test_stale_halt_carries_the_gate_reason` **(nueva 24-nov)** · `tests/core/test_live.py::test_agent_decides_on_the_tick_and_wallet_it_was_given` **(nueva 24-nov)** · `tests/core/test_live.py::test_policy_gets_the_measured_data_age` **(nueva 24-nov)** · `tests/core/test_live.py::test_order_is_submitted_with_the_intent_origin_and_symbol` **(nueva 24-nov)** · `tests/core/test_live.py::test_unmapped_order_state_reports_submitted_with_its_outcome` **(nueva 24-nov)** |
 | Preflight de armado: autorización del agente (sin distinguir mayúsculas), colateral, relevo fresco, freno, nivel micro; sin las dependencias de firma **no arma** | `tests/core/test_preflight_arm.py::test_arm_preflight_success` · `tests/core/test_preflight_arm.py::test_arm_preflight_auth_is_case_insensitive` · `tests/core/test_preflight_arm.py::test_arm_preflight_unauthorized_agent` · `tests/core/test_preflight_arm.py::test_arm_preflight_low_collateral` · `tests/core/test_preflight_arm.py::test_arm_preflight_stale_relay` · `tests/core/test_preflight_arm.py::test_arm_preflight_tripped_breaker` · `tests/core/test_preflight_arm.py::test_arm_preflight_fails_closed_without_signing_deps` **(nueva)** |
 
 ## 5. Billetera y ciclo de simulación (`wallet.py`, `runner.py`)

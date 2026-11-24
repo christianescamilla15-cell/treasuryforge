@@ -16,7 +16,7 @@ import pytest
 from treasuryforge.exchanges.bitso.executor import OrderHandle, Unfilled
 from treasuryforge.journal import Journal
 from treasuryforge.live import LiveSupervisor, StepKind, StepResult
-from treasuryforge.orders import IdempotentOrderManager
+from treasuryforge.orders import IdempotentOrderManager, OrderState, Outcome
 from treasuryforge.policy import PolicyConfig, PolicyEngine
 from treasuryforge.preflight import PreflightInputs
 from treasuryforge.staleness import NS_PER_S, StalenessGate
@@ -202,3 +202,99 @@ def test_hold_reason_exact(tmp_path):
     sup, _ = _sup(tmp_path, intent=None)
     sup.observe_data(W)
     assert sup.step(_tick(), SimWallet(10_000)).reason == "no signal"
+
+
+# -- mutation hardening (mutmut 3): step() hands each guard the RIGHT values ----------
+class SpyAgent(FakeAgent):
+    def __init__(self, intent):
+        super().__init__(intent)
+        self.seen = []
+
+    def decide(self, tick, wallet):
+        self.seen.append((tick, wallet))
+        return self.intent
+
+
+class SpyPolicy(PolicyEngine):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.kwargs = []
+
+    def evaluate(self, intent, tick, wallet, **kwargs):
+        self.kwargs.append(kwargs)
+        return super().evaluate(intent, tick, wallet, **kwargs)
+
+
+class SpyOrders:
+    """Stands in for the idempotent manager: records the call, answers a fixed Outcome."""
+
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.calls = []
+
+    def submit(self, intent, origin_id, symbol):
+        self.calls.append((intent, origin_id, symbol))
+        return self.outcome
+
+
+def test_stale_halt_carries_the_gate_reason(tmp_path):
+    sup, _ = _sup(tmp_path, intent=_buy(), max_age=5 * NS_PER_S)
+    sup.observe_data(W - 60 * NS_PER_S)
+    r = sup.step(_tick(), SimWallet(10_000))
+    assert r.reason == f"stale data: age {60 * NS_PER_S}ns > budget {5 * NS_PER_S}ns"
+
+
+def test_step_feeds_the_monotonic_clock_to_the_gate(tmp_path):
+    # wall advances 1 s while the monotonic clock advances 100 s: only a gate that
+    # receives BOTH clocks can see the drift and halt
+    clocks = {"wall": W, "mono": M}
+    sup, _ = _sup(tmp_path, intent=None)
+    sup.wall_ns = lambda: clocks["wall"]
+    sup.mono_ns = lambda: clocks["mono"]
+    sup.observe_data(W)
+    assert sup.step(_tick(), SimWallet(10_000)).kind is StepKind.HOLD
+    clocks["wall"] += NS_PER_S
+    clocks["mono"] += 100 * NS_PER_S
+    sup.observe_data(clocks["wall"])
+    r = sup.step(_tick(), SimWallet(10_000))
+    assert r.kind is StepKind.HALTED_STALE and r.reason.startswith("clock drift")
+
+
+def test_agent_decides_on_the_tick_and_wallet_it_was_given(tmp_path):
+    sup, _ = _sup(tmp_path, intent=None)
+    sup.agent = SpyAgent(None)
+    sup.observe_data(W)
+    tick, wallet = _tick(), SimWallet(10_000)
+    sup.step(tick, wallet)
+    assert sup.agent.seen == [(tick, wallet)]
+
+
+def test_policy_gets_the_measured_data_age(tmp_path):
+    sup, _ = _sup(tmp_path, intent=_buy())
+    sup.policy = SpyPolicy(_cfg())
+    sup.observe_data(W - 2 * NS_PER_S)                 # data is 2 s old
+    sup.step(_tick(), SimWallet(10_000))
+    assert sup.policy.kwargs == [{"data_age_ns": 2 * NS_PER_S}]
+
+
+def test_order_is_submitted_with_the_intent_origin_and_symbol(tmp_path):
+    outcome = Outcome(origin_id="o-1", state=OrderState.FILLED, reason="filled")
+    sup, _ = _sup(tmp_path, intent=_buy())
+    sup.orders = SpyOrders(outcome)
+    sup.origin_for = lambda intent, tick: f"{intent.side.value}:{intent.symbol}:{tick.ts}"
+    sup.observe_data(W)
+    sup.step(_tick(), SimWallet(10_000))
+    (intent, origin_id, symbol), = sup.orders.calls
+    assert intent == _buy() and origin_id == f"{Side.BUY.value}:BTC:1" and symbol == "BTC"
+
+
+def test_unmapped_order_state_reports_submitted_with_its_outcome(tmp_path):
+    # an accepted order whose fate is still unknown is SUBMITTED (it traded), and the
+    # result carries the manager's own reason and outcome for the caller to act on
+    outcome = Outcome(origin_id="o-1", state=OrderState.UNKNOWN, reason="POST timed out")
+    sup, _ = _sup(tmp_path, intent=_buy())
+    sup.orders = SpyOrders(outcome)
+    sup.observe_data(W)
+    r = sup.step(_tick(), SimWallet(10_000))
+    assert r.kind is StepKind.SUBMITTED and r.traded
+    assert r.reason == "POST timed out" and r.outcome is outcome
