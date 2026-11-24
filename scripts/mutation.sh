@@ -112,7 +112,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 WANT=" $* "
-"$PY" -m mutmut --version
+# not `mutmut --version`: mutmut 3 guesses the source dir even for that and crashes outside the repo dir
+"$PY" -c 'import importlib.metadata as m; print("mutmut", m.version("mutmut"))'
 printf '%-16s %7s %10s %8s %7s\n' COMPONENT KILLED NOT-KILLED MUTANTS SCORE
 fail=0; measured=0; idx=0
 for entry in "${COMPONENTS[@]}"; do
