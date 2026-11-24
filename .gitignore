@@ -24,9 +24,7 @@ coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
-.mutmut-cache
-*.bak          # mutmut writes <file>.bak while mutating; leftover only if a run is killed
-_surv/         # local survivor-diff dumps from scripts/_mut_copy.sh
+mutants/       # mutmut 3 run from the repo root (scripts/mutation.sh uses a throw-away copy)
 *.egg-info/
 build/
 dist/

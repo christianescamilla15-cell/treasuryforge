@@ -7,5 +7,6 @@ ruff>=0.6          # lint + import hygiene
 mypy>=1.11         # static types
 bandit>=1.7        # security static analysis
 pip-audit>=2.7     # dependency vulnerability scan
-mutmut==2.5.1      # mutation testing (the "Stryker" of Python) — proves tests catch bugs
-                   # (pinned: 3.x has a broken import; needs Linux/WSL, runs in CI/Docker)
+mutmut==3.8.1      # mutation testing (the "Stryker" of Python) — proves tests catch bugs
+                   # (pinned: its config/CLI change between majors and scripts/mutation.sh depends on
+                   #  them; needs Linux/WSL — it forks — runs in CI/Docker)

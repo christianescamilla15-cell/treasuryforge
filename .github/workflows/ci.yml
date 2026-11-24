@@ -84,9 +84,9 @@ jobs:
         run: docker logs api || true
 
   mutacion:
-    # Puerta de mutación original (>= 85 % por componente). En serie toma ~32 min (medido en local el
-    # 2026-11-19: los 42 componentes pasan, el más bajo 85 %); se reparte
-    # en 6 fragmentos round-robin (scripts/mutation.sh --shard K/6) para que corra en cada PR.
+    # Puerta de mutación original (>= 85 % por componente) con mutmut 3. En serie toma ~4 min en local
+    # (2026-11-24, 12 núcleos: los 42 componentes pasan, el más bajo 85 %); se reparte en 6 fragmentos
+    # round-robin (scripts/mutation.sh --shard K/6). Los nombres de los fragmentos son checks requeridos.
     name: mutación (fragmento ${{ matrix.fragmento }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 45

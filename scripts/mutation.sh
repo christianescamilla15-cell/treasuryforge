@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Per-component mutation testing with a kill-score gate (default 85%).
-# Linux/Docker only (mutmut needs Linux). Each component is mutated against ITS
+# Linux/Docker only (mutmut forks). Each component is mutated against ITS
 # OWN test suite — the component-organized layout is what makes this meaningful.
 #   docker run --rm treasuryforge:ci bash scripts/mutation.sh
 #   bash scripts/mutation.sh --shard 2/6     # CI: the 2nd of 6 round-robin slices
 #   bash scripts/mutation.sh metrics drift   # only those components
+#   bash scripts/mutation.sh --survivors policy   # + the diff of every mutant that was not killed
+#
+# mutmut 3 takes no paths on the command line: it reads [tool.mutmut] from pyproject.toml
+# and writes the mutated tree to ./mutants. So each component runs on a THROW-AWAY COPY
+# (package + tests + pyproject) with its own [tool.mutmut] appended: the working tree is
+# never mutated and one component's results can never leak into the next one.
 set -uo pipefail
 THRESHOLD=${MUTATION_THRESHOLD:-85}
 PY=${PY:-python}                 # set PY=/opt/treasuryforge/.venv/bin/python on the VPS
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 # "name | source file | its test path(s)"
 COMPONENTS=(
@@ -55,15 +62,58 @@ COMPONENTS=(
   "tsmom_bt  | treasuryforge/tsmom_backtest.py  | tests/core/test_tsmom_backtest.py"
 )
 
+# mutate <src> <tests...>: prints "killed not_killed mutants score" (score -1 = did not run).
+# Score = mutmut 3's own formula, (killed + timeout) / (total - skipped): a mutant that
+# survived, had no covering test or ended "suspicious" counts AGAINST the component.
+mutate() {
+  local src="$1"; shift
+  local work line
+  work=$(mktemp -d)
+  cp -r "$ROOT/treasuryforge" "$ROOT/tests" "$ROOT/pyproject.toml" "$work/"
+  find "$work" -name __pycache__ -prune -exec rm -rf {} +
+  {
+    echo
+    echo '[tool.mutmut]'
+    echo 'source_paths = ["treasuryforge"]'
+    echo "only_mutate = [\"$src\"]"
+    printf 'pytest_add_cli_args_test_selection = [%s]\n' "$(printf '"%s", ' "$@" | sed 's/, $//')"
+  } >> "$work/pyproject.toml"
+  if (cd "$work" && "$PY" -m mutmut run > mutmut.log 2>&1 && "$PY" -m mutmut export-cicd-stats > /dev/null 2>&1); then
+    line=$("$PY" - "$work/mutants/mutmut-cicd-stats.json" <<'PYEOF'
+import json, sys
+s = json.load(open(sys.argv[1]))
+detected = s["killed"] + s["timeout"]
+tested = s["total"] - s["skipped"]
+print(detected, tested - detected, tested, 100 * detected // tested if tested else -1)
+PYEOF
+)
+  else
+    line="0 0 0 -1"
+    echo "  mutmut failed on $src; last lines of its log:" >&2
+    tr '\r' '\n' < "$work/mutmut.log" | grep -av '^\s*$' | tail -15 | sed 's/^/    /' >&2
+  fi
+  if [ "$SURVIVORS" -eq 1 ]; then
+    (cd "$work" && for m in $("$PY" -m mutmut results 2>/dev/null | cut -d: -f1); do
+       "$PY" -m mutmut show "$m" 2>/dev/null; echo; done) >&2
+  fi
+  rm -rf "$work"
+  echo "$line"
+}
+
 # --shard K/N runs every N-th component starting at the K-th (round-robin, so a component
 # added to the list is ALWAYS in some shard). Other positional args restrict the run to
 # those component names (e.g. `... metrics drift`).
-SHARD_K=0; SHARD_N=1
-if [ "${1:-}" = "--shard" ]; then
-  SHARD_K=${2%%/*}; SHARD_N=${2##*/}; shift 2
-fi
+SHARD_K=0; SHARD_N=1; SURVIVORS=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --shard) SHARD_K=${2%%/*}; SHARD_N=${2##*/}; shift 2 ;;
+    --survivors) SURVIVORS=1; shift ;;
+    *) break ;;
+  esac
+done
 WANT=" $* "
-printf '%-11s %7s %9s %7s\n' COMPONENT KILLED SURVIVED SCORE
+"$PY" -m mutmut --version
+printf '%-16s %7s %10s %8s %7s\n' COMPONENT KILLED NOT-KILLED MUTANTS SCORE
 fail=0; measured=0; idx=0
 for entry in "${COMPONENTS[@]}"; do
   idx=$((idx + 1))
@@ -71,23 +121,17 @@ for entry in "${COMPONENTS[@]}"; do
   IFS='|' read -r name src tests <<< "$entry"
   name=$(echo "$name" | xargs); src=$(echo "$src" | xargs); tests=$(echo "$tests" | xargs)
   [ "$#" -gt 0 ] && [[ "$WANT" != *" $name "* ]] && continue
-  rm -rf .mutmut-cache
-  # locale-robust parse: the final progress line is "N/M K t s S k" (killed=3rd, survived=6th int)
-  nums=$("$PY" -m mutmut run --paths-to-mutate "$src" --runner "$PY -m pytest -xq $tests" 2>&1 \
-         | tr '\r' '\n' | grep -aE '[0-9]+/[0-9]+ ' | tail -1 | grep -oE '[0-9]+' | tr '\n' ' ')
-  killed=$(echo "$nums" | awk '{print $3}'); killed=${killed:-0}
-  surv=$(echo "$nums"   | awk '{print $6}'); surv=${surv:-0}
-  total=$((killed + surv))
+  # shellcheck disable=SC2086  # the test list is word-split on purpose
+  read -r killed notkilled total score <<< "$(mutate "$src" $tests)"
   measured=$((measured + 1))
-  if [ "$total" -eq 0 ]; then
+  if [ "$score" -lt 0 ]; then
     # 0 mutants means mutmut did not run (e.g. its baseline test run failed): a gate that
     # measured nothing must not pass.
-    printf '%-11s %7s %9s %7s\n' "$name" "-" "-" "NO-RUN"
+    printf '%-16s %7s %10s %8s %7s\n' "$name" "-" "-" "-" "NO-RUN"
     fail=1
     continue
   fi
-  score=$((100 * killed / total))
-  printf '%-11s %7s %9s %6s%%\n' "$name" "$killed" "$surv" "$score"
+  printf '%-16s %7s %10s %8s %6s%%\n' "$name" "$killed" "$notkilled" "$total" "$score"
   [ "$score" -lt "$THRESHOLD" ] && fail=1
 done
 
