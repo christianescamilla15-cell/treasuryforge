@@ -5,7 +5,7 @@ hypothesis>=6.0     # property-based / stateful fuzzing of the policy engine
 
 ruff>=0.17.5       # lint + import hygiene
 mypy>=2.4.1        # static types
-bandit>=1.7        # security static analysis
+bandit>=1.9.4        # security static analysis
 pip-audit>=2.10.1  # dependency vulnerability scan
 mutmut==3.8.1      # mutation testing (the "Stryker" of Python) — proves tests catch bugs
                    # (pinned: its config/CLI change between majors and scripts/mutation.sh depends on
